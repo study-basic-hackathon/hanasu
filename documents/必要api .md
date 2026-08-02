@@ -1,0 +1,49 @@
+## 必要API一覧
+- 認証API
+  - input
+    - ID,Password
+  - output
+    - 認証結果
+- 企業情報登録CRUD API
+  - Create
+    - inputs
+      - 企業情報
+    - output
+      - 登録結果
+  - Read
+    - inputs
+      - 企業ID
+    - output
+      - 企業情報
+  - Update
+    - inputs
+      - 企業ID
+      - 更新情報
+    - output
+      - 更新結果
+  - Delete
+    - inputs
+      - 企業ID
+    - output
+      - 削除結果
+- 音声認識API（分割の可能性あり）
+  - input
+  - output
+    - 文字起こし
+    - 音声分析
+      - 抑揚
+      - フィーラー
+      - 声の大きさ
+      - スピード・テンポ
+- 内容評価API
+  - inputs
+    - 文字起こし結果、抑揚などの話の情報
+  - output 
+    - 評価点数
+    - アドバイス
+- 会話用API
+  - TODO：調べる
+
+## API制約
+- 認証ユーザーのみ実行可能
+- 
