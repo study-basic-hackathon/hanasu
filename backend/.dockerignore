@@ -1,0 +1,21 @@
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+
+# 仮想環境（ホストのMac用。箱には入れない → Dockerfileで /opt/venv に作る）
+.venv/
+
+# 環境変数（秘密情報。箱に焼き込まない）
+.env
+.env.*
+
+# git / ツール類
+.git/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# エディタ / OS
+.vscode/
+.idea/
+.DS_Store
