@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Python のログを即時出力
 ENV PYTHONUNBUFFERED=1
+# __pycache__(.pyc) を書かせない（マウント先が汚れるのを防ぐ）
+ENV PYTHONDONTWRITEBYTECODE=1
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

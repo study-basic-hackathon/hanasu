@@ -8,7 +8,7 @@ services:
       - ./backend:/app # ソースをマウント → 保存で即反映（開発用）
     environment:
       # DB 接続情報（app 側で os.getenv("DATABASE_URL") で受け取る想定）
-      DATABASE_URL: postgresql://hanasu:hanasu@db:5432/hanasu
+      DATABASE_URL: postgresql+psycopg://hanasu:hanasu@db:5432/hanasu
     depends_on:
       db:
         condition: service_healthy # db が起動しきってから api を立てる
