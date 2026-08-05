@@ -1,6 +1,7 @@
 # 検討: create-next-app の生成オプション
 
 - ステータス: 検討中
+- 区分: **必須と任意が混在**（ルーター方式・TypeScript は必須 = 生成後の変更が高コスト。Tailwind・Linter・`src/`・import alias 等は任意 = 推奨デフォルトで進めてよく後から変更可能）
 - 開始日: 2026-08-06
 - 最終更新: 2026-08-06
 - 関連: [ADR-0001](../ADR/0001-フロントエンド実行環境.md)、[タスクメモ: 0805-Frontend動作検証用初期構築](../task-memo/0805-Frontend動作検証用初期構築.md)、[検討: パッケージマネージャの選定](20260806_パッケージマネージャの選定.md)(`--use-*` 指定に影響)、[検討: 開発バンドラと Docker 上のホットリロード](20260806_開発バンドラとDocker上のホットリロード.md)(Turbopack の扱い)
@@ -13,6 +14,7 @@
 
 1. **Next.js のバージョンをどうするか**
 2. **各生成オプションをどうするか**(TypeScript / App Router / Linter / React Compiler / Tailwind CSS / `src/` ディレクトリ / import alias / AGENTS.md)
+3. **そもそも Linter は必須か**(2026-08-06 ユーザーからの問い。後述「Linter の要否」で整理)
 
 ## 事実確認(出典付き)
 
@@ -59,6 +61,30 @@
 
 `src/` について補足すると、create-next-app のデフォルトは**無効**であり、公式ドキュメントのパス表記(`app/layout.tsx` 等)は `src/` なしを前提としている。`src/` を有効にすると `src/app/layout.tsx` となりドキュメントとズレるが、Next.js 公式も [`src` フォルダの規約](https://nextjs.org/docs/app/api-reference/file-conventions/src-folder)としてサポートしている。今回は Docker / Dev Container 関連ファイルが `frontend/` 直下に増えることを重く見て有効を推奨するが、チームの好みで決めてよい項目。
 
+### 論点3: Linter の要否(ESLint / Biome / なし)
+
+**技術的には必須ではない。** create-next-app には `--no-linter` があり、Next.js 16 では `next build` が Linter を実行しないため、**Linter なしでもローカルのビルドも Vercel へのデプロイも通る**(出典は上記「事実確認」)。そのうえで3択を比較する。
+
+| 観点 | A案: ESLint | B案: Biome | C案: なし(`--no-linter`) |
+|---|---|---|---|
+| Next.js 固有ルール | `@next/eslint-plugin-next`(`<img>` の代わりに `next/image`、`<a>` の代わりに `next/link` を促す等) | Next.js / React ドメインの組み込みサポートあり | なし |
+| Formatter | 別途 Prettier が必要(管理対象が2つ) | **内蔵**(Prettier 不要、管理対象は1つ) | なし(整形は各自のエディタ任せ) |
+| 設定ファイル | `eslint.config.mjs` + Prettier 設定 | `biome.json` 1つ | なし |
+| 実行速度 | 標準 | 高速(Rust 製) | — |
+| 生成時の導入コスト | **ゼロ**(create-next-app が生成) | **ゼロ**(同左) | ゼロ |
+| 後から導入するコスト | 中(依存追加 + 設定ファイル作成 + 既存コードの警告対応) | 中(同左) | — |
+| ビルド・デプロイへの影響 | **なし**(Next.js 16 は build 時に lint しない) | **なし** | なし |
+| 日本語情報量 | 多い | 少なめ | — |
+
+**判断の材料:**
+
+- **導入コストは非対称。** 生成時に入れるコストはゼロだが、後から入れると設定作成に加えて既存コードの警告対応が発生する。「要らなくなったら消す」ほうが「後で足す」より安い
+- **Linter が止めるものは減っている。** Next.js 16 で `next build` が lint を実行しなくなったため、Linter を入れても開発やデプロイがブロックされることはない。エディタ上の警告と、明示的に `npm run lint` を叩いたときだけ効く
+- **TypeScript との役割分担。** 汎用的なバグ検出は型チェックが担うため、Linter の価値は主に **Next.js 固有ルール**(`next/image` / `next/link` の使い忘れなど、型では検出できずパフォーマンスに影響するもの)に寄っている
+- **AI エージェントによるコード生成のガードレール。** 本リポジトリは Claude Code を利用しており(`CLAUDE.md` が存在)、生成コードの品質を機械的にチェックできる意義がある
+
+**「管理対象を減らしたい」が動機なら、C案(なし)より B案(Biome)のほうが目的に近い可能性がある。** A案は ESLint + Prettier の2つを管理することになるが、B案は1つで済み、実行も速い。Linter そのものを捨てなくても管理コストは下げられる。
+
 ### 推奨どおりの場合の実行コマンド
 
 ```bash
@@ -86,6 +112,7 @@ npx create-next-app@latest frontend \
 
 ## 議論ログ
 
+- **2026-08-06 ラウンド2**: ユーザーより「Linter は必須か」という問い。**技術的には必須ではない**(`--no-linter` があり、Next.js 16 では `next build` が lint を実行しないためビルドもデプロイも通る)と回答したうえで、「論点3: Linter の要否」として3択(ESLint / Biome / なし)の比較を追加。導入コストの非対称性(生成時はゼロ、後付けは中)、Linter の価値が Next.js 固有ルールに寄っていること、管理対象を減らしたいなら「なし」より Biome が目的に近いことを整理した。**ユーザーの回答待ち。**
 - **2026-08-06 ラウンド1**: Next.js 16.3 の公式ドキュメント(create-next-app / Installation / リリースブログ)を一次情報として調査。推奨デフォルトをベースに、既存ドキュメント(`技術スタック.md`・タスクメモ)との整合と後から変更するコストで各項目を評価。あわせて、Next.js 16 で `next build` が Linter を自動実行しなくなった点、16.3 で `next dev` が `AGENTS.md` を自動更新する点を懸念として抽出した。Tailwind / Linter / `src/` の3点は好みが分かれるためチーム確認事項とした。ユーザーの最終決定待ち。
 
 ## 結論
