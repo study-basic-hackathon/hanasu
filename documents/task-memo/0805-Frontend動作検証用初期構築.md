@@ -44,8 +44,8 @@ npx create-next-app@latest frontend \
 - [x] 事前決定（必須）: ルーター方式（App Router / Pages Router）を決め「決定事項」に記録する（済: App Router — [ADR-0004](../ADR/0004-Nextjsプロジェクト初期構成.md)）
 - [x] 事前決定（任意）: create-next-app の細部オプション（Tailwind・`src/` ディレクトリ・import alias 等）（済: Tailwind 有効 / `src/` 有効 / alias `@/*` / Linter は ESLint / React Compiler なし / AGENTS.md 生成 — [ADR-0004](../ADR/0004-Nextjsプロジェクト初期構成.md)）
 - [x] 事前決定（任意）: 開発バンドラと Docker ベースイメージ（済: Turbopack のまま — [ADR-0005](../ADR/0005-開発バンドラ.md) / `node:24-bookworm-slim` — [ADR-0006](../ADR/0006-開発用Dockerベースイメージ.md)）
-- [ ] `frontend/` に create-next-app で Next.js プロジェクトを作成する
-- [ ] `package.json` の `engines.node` で Node バージョンを固定する(ADR-0001 フォローアップ。Vercel が読むのは `engines` と Project Settings のみで、`.nvmrc` は公式ドキュメントに記載がない)
+- [x] `frontend/` に create-next-app で Next.js プロジェクトを作成する（2026-08-06 完了。Next.js 16.3.0 / React 19.2.8）
+- [x] `package.json` の `engines.node` で Node バージョンを固定する（2026-08-06 完了。`"engines": { "node": "24.x" }`。Vercel が読むのは `engines` と Project Settings のみで、`.nvmrc` は公式ドキュメントに記載がない）
 - [ ] 開発用 Dockerfile を作成する(`next dev` を実行する開発用途のもの)
 - [ ] `compose.yaml` を作成する(ポート 3000 公開、ソースの bind mount、`node_modules` はコンテナ側に分離)
 - [ ] `docker compose up` でサンプルページが表示されることを確認する
@@ -81,4 +81,37 @@ npx create-next-app@latest frontend \
 
 ---
 # 作業ログ
+
+## 2026-08-06 create-next-app 実行
+
+**ホストに Node が入っていなかったため、生成自体を Docker コンテナ内で実行した。** 決定済みのベースイメージ（`node:24-bookworm-slim`）をそのまま使ったので、生成時の Node バージョンも 24 系で `engines.node` と一致している。
+
+```bash
+# frontend/.gitkeep を削除してから実行（create-next-app が空でないディレクトリを拒否するため）
+docker run --rm -v "$PWD:/work" -w /work \
+  node:24-bookworm-slim \
+  npx --yes create-next-app@latest frontend \
+    --ts --app --eslint --tailwind --src-dir --import-alias "@/*" \
+    --no-react-compiler --agents-md --use-npm --disable-git
+```
+
+- `--disable-git` は ADR-0004 のコマンドには無いが、既に git 管理下のリポジトリであることと、slim イメージに git が入っていないことから追加した
+- 生成物のファイル所有権はホストユーザーのまま（Docker Desktop の uid マッピングが効いている）
+
+**生成結果**
+
+- Next.js 16.3.0 / React 19.2.8 / TypeScript / App Router / ESLint / Tailwind CSS v4
+- `src/app/`（`layout.tsx` / `page.tsx` / `globals.css` / `favicon.ico`）、import alias `@/*` → `./src/*`
+- `package-lock.json` が生成され、`.gitignore` の対象外（＝コミットされる）。`node_modules` と `.next/` は除外済み
+- `frontend/CLAUDE.md` は `@AGENTS.md` の1行のみで、ルートの `CLAUDE.md` と内容が重複しない（ADR-0004 の懸念は解消）
+- `AGENTS.md` は `next dev` が自動で書き戻すブロック。ファイル自身に「作業と一緒にコミットすればツリーがきれいに保てる」と書かれているため、コミット対象とする
+
+**追加で行った変更**
+
+- `@types/node` を `^20` → `^24` に更新した。create-next-app のデフォルトは `^20` だったが、ADR-0002 で Node 24.x と決めているため揃えた
+
+**検証結果**
+
+- `npm run lint`: エラーなし
+- `npm run build`: 成功（Turbopack、2.7 秒でコンパイル、`/` と `/_not-found` を静的生成）
 
