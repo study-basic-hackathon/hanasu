@@ -10,35 +10,40 @@
 
 ## 決定事項
 
-論点ごとに検討記録を作成済み。承認された項目から順に確定していく。
+**全項目確定(2026-08-06)。** 各決定は ADR として記録済み。
 
-### 確定
+| 項目 | 決定 | ADR | 検討記録 |
+|---|---|---|---|
+| Node.js バージョン | **24.x**。固定の正は `package.json` の `engines.node: "24.x"` で、Dockerfile のタグを一致させる。`.nvmrc` は Vercel に効かないため根拠にしない | [ADR-0002](../ADR/0002-Nodeバージョン.md) | [記録](../00_検討/20260806_Nodeバージョンの選定と固定方法.md) |
+| パッケージマネージャ | **npm**。`package-lock.json` をコミットし、Vercel の lockfile 検出に任せる | [ADR-0003](../ADR/0003-パッケージマネージャ.md) | [記録](../00_検討/20260806_パッケージマネージャの選定.md) |
+| Next.js プロジェクト初期構成 | **Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind / `src/` あり / alias `@/*` / AGENTS.md 生成 / React Compiler なし** | [ADR-0004](../ADR/0004-Nextjsプロジェクト初期構成.md) | [記録](../00_検討/20260806_create-next-appの生成オプション.md) |
+| 開発バンドラ | **Turbopack(デフォルト)のまま**。Docker でホットリロードが効かないと実測できた場合のみ、開発コマンドを `next dev --webpack` + `WATCHPACK_POLLING=true` に切り替える | [ADR-0005](../ADR/0005-開発バンドラ.md) | [記録](../00_検討/20260806_開発バンドラとDocker上のホットリロード.md) |
+| Docker ベースイメージ | **`node:24-bookworm-slim`** / ポート 3000 / `node_modules` は named volume に分離 | [ADR-0006](../ADR/0006-開発用Dockerベースイメージ.md) | [記録](../00_検討/20260806_フロントエンド開発用Dockerベースイメージ.md) |
 
-**Node.js バージョンと固定方法(2026-08-06 決定)** — [ADR-0002](../ADR/0002-Nodeバージョン.md) / 根拠: [検討記録](../00_検討/20260806_Nodeバージョンの選定と固定方法.md)
+### プロジェクト生成コマンド
 
-- Node.js は **24.x** を使う(Vercel が使える3系のうち唯一の Active LTS。Vercel のデフォルトとも一致)
-- 固定の「正」は **`package.json` の `engines.node: "24.x"`**。Dockerfile のイメージタグをこれに一致させる
-- `.nvmrc` は置いてもよいが、**Vercel には効かない**ため整合の根拠にはしない(Vercel が読むのは `engines.node` と Project Settings のみ)
+```bash
+npx create-next-app@latest frontend \
+  --ts --app --eslint --tailwind --src-dir --import-alias "@/*" \
+  --no-react-compiler --agents-md --use-npm
+```
 
-### 承認待ち
+### 決定に伴う申し送り
 
-| 論点 | 推奨案 | 検討記録 |
-|---|---|---|
-| パッケージマネージャ | npm | [記録](../00_検討/20260806_パッケージマネージャの選定.md) |
-| create-next-app の生成オプション | Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind / `src/` あり / alias `@/*` / AGENTS.md 生成 / React Compiler なし | [記録](../00_検討/20260806_create-next-appの生成オプション.md) |
-| 開発バンドラとホットリロード | Turbopack(デフォルト)で開始し、効かなければ開発時のみ `--webpack` | [記録](../00_検討/20260806_開発バンドラとDocker上のホットリロード.md) |
-| Docker ベースイメージ | `node:24-bookworm-slim` / ポート 3000 | [記録](../00_検討/20260806_フロントエンド開発用Dockerベースイメージ.md) |
-
-チーム確認が必要な項目: Tailwind CSS の要否、Linter(ESLint / Biome)、`src/` ディレクトリの要否。
+- **Linter を ESLint としたのは「一旦」の判断。** ESLint + Prettier の管理が重いと感じたら Biome への移行を再検討する
+- **Next.js 16 から `next build` は Linter を実行しない。** `npm run lint` を回す運用(手動 / CI)を別途決める
+- **Turbopack の Docker 上でのホットリロードは未実測。** フェーズ1 の検証タスクで実測し、結果を ADR-0005 と検討記録に追記する
+- **`frontend/CLAUDE.md` が生成される。** ルートの `CLAUDE.md` と役割が重複しないか生成後に確認する
 
 ## タスク
 
 ### フェーズ1: Docker 上で動く Next.js サンプル
 
 - [x] 事前決定（必須）: Node バージョンを決め「決定事項」に記録する（済: 24.x — [ADR-0002](../ADR/0002-Nodeバージョン.md)。固定は `package.json` の `engines.node`）
-- [ ] 事前決定（必須）: パッケージマネージャ（npm / pnpm）を決め「決定事項」に記録する（lockfile と Dockerfile 内コマンドに直結し、後からの変更はやり直しが大きい）
-- [ ] 事前決定（必須）: ルーター方式（App Router / Pages Router）を決め「決定事項」に記録する（プロジェクト構造に直結。推奨: App Router）
-- [ ] 事前決定（任意）: create-next-app の細部オプション（Tailwind・`src/` ディレクトリ・import alias 等）— 推奨デフォルトのまま進めてよく、後から変更可能（TypeScript・ESLint は技術スタックで確定済み扱い）
+- [x] 事前決定（必須）: パッケージマネージャ（npm / pnpm）を決め「決定事項」に記録する（済: npm — [ADR-0003](../ADR/0003-パッケージマネージャ.md)）
+- [x] 事前決定（必須）: ルーター方式（App Router / Pages Router）を決め「決定事項」に記録する（済: App Router — [ADR-0004](../ADR/0004-Nextjsプロジェクト初期構成.md)）
+- [x] 事前決定（任意）: create-next-app の細部オプション（Tailwind・`src/` ディレクトリ・import alias 等）（済: Tailwind 有効 / `src/` 有効 / alias `@/*` / Linter は ESLint / React Compiler なし / AGENTS.md 生成 — [ADR-0004](../ADR/0004-Nextjsプロジェクト初期構成.md)）
+- [x] 事前決定（任意）: 開発バンドラと Docker ベースイメージ（済: Turbopack のまま — [ADR-0005](../ADR/0005-開発バンドラ.md) / `node:24-bookworm-slim` — [ADR-0006](../ADR/0006-開発用Dockerベースイメージ.md)）
 - [ ] `frontend/` に create-next-app で Next.js プロジェクトを作成する
 - [ ] `package.json` の `engines.node` で Node バージョンを固定する(ADR-0001 フォローアップ。Vercel が読むのは `engines` と Project Settings のみで、`.nvmrc` は公式ドキュメントに記載がない)
 - [ ] 開発用 Dockerfile を作成する(`next dev` を実行する開発用途のもの)
@@ -62,6 +67,10 @@
 
 - [ADR-0001: フロントエンドのデプロイ先を Vercel とする](../ADR/0001-フロントエンド実行環境.md) — ローカル開発は Docker 上で `next dev`、Node バージョンを Vercel と統一する方針
 - [ADR-0002: Node.js のバージョンを 24.x とし `package.json` の `engines` で固定する](../ADR/0002-Nodeバージョン.md) — ADR-0001 のフォローアップを具体化。ADR-0001 に依存する
+- [ADR-0003: フロントエンドのパッケージマネージャを npm とする](../ADR/0003-パッケージマネージャ.md) — ADR-0001 に依存する
+- [ADR-0004: Next.js プロジェクトの初期構成を create-next-app の推奨デフォルト + `src/` とする](../ADR/0004-Nextjsプロジェクト初期構成.md) — ADR-0001 / ADR-0003 に依存する
+- [ADR-0005: 開発時のバンドラを Turbopack のままとする](../ADR/0005-開発バンドラ.md) — ADR-0001 / ADR-0004 に依存する。Docker 上のホットリロードは未実測
+- [ADR-0006: 開発用 Docker ベースイメージを `node:24-bookworm-slim` とする](../ADR/0006-開発用Dockerベースイメージ.md) — ADR-0001 / ADR-0002 に依存する
 - [検討記録: フロントエンド実行環境](../00_検討/20260804_フロントエンド実行環境.md)
 - 本メモ「決定事項」の根拠となる検討記録(論点ごとに分割):
   - [Node.js バージョンの選定と固定方法](../00_検討/20260806_Nodeバージョンの選定と固定方法.md)
