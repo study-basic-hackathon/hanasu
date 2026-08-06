@@ -6,7 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 「hanasu」はハッカソン用のプロジェクトで、音声会話を録音・文字起こしし、話し方(抑揚・フィラー・声量・テンポ)を分析して評価・アドバイスを返すサービスを想定している。
 
-**現状はコード未実装の計画段階。** `backend/` `frontend/` `infra/` はすべて空(`.gitkeep` のみ)で、`documents/` 配下の設計ドキュメントが唯一の情報源。ビルド・テスト・lint コマンドはまだ存在しない。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
+**`frontend/` は Next.js プロジェクトを作成済み(2026-08-06)。`backend/` `infra/` は未実装(空)。** 未実装部分については `documents/` 配下の設計ドキュメントが唯一の情報源。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
+
+なお **ホストに Node は入っていない。** フロントエンドのコマンドはコンテナ内で実行する。Docker 開発環境(Dockerfile / compose.yaml / Dev Container)は整備中で、確定後にここへ起動・開発コマンドを追記する。それまでの暫定手段は以下。
+
+```bash
+# frontend/ で lint / build を実行する例
+docker run --rm -v "$PWD:/work" -w /work/frontend node:24-bookworm-slim npm run lint
+docker run --rm -v "$PWD:/work" -w /work/frontend node:24-bookworm-slim npm run build
+```
 
 ## 技術スタック(予定)
 
@@ -33,7 +41,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## リポジトリ構成
 
 - `backend/` — Go バックエンド(未実装)
-- `frontend/` — Next.js フロントエンド(未実装)
+- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(`package.json` の `engines.node` で固定)。構成の根拠は ADR-0002〜0006
 - `infra/` — AWS インフラコード(未実装)
 - `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`frontend/01_design/`、`frontend/02_spec/` のサブディレクトリあり
 
