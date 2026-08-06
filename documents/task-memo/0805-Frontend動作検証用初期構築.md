@@ -46,10 +46,11 @@ npx create-next-app@latest frontend \
 - [x] 事前決定（任意）: 開発バンドラと Docker ベースイメージ（済: Turbopack のまま — [ADR-0005](../ADR/0005-開発バンドラ.md) / `node:24-bookworm-slim` — [ADR-0006](../ADR/0006-開発用Dockerベースイメージ.md)）
 - [x] `frontend/` に create-next-app で Next.js プロジェクトを作成する（2026-08-06 完了。Next.js 16.3.0 / React 19.2.8）
 - [x] `package.json` の `engines.node` で Node バージョンを固定する（2026-08-06 完了。`"engines": { "node": "24.x" }`。Vercel が読むのは `engines` と Project Settings のみで、`.nvmrc` は公式ドキュメントに記載がない）
-- [ ] 開発用 Dockerfile を作成する(`next dev` を実行する開発用途のもの)
-- [ ] `compose.yaml` を作成する(ポート 3000 公開、ソースの bind mount、`node_modules` はコンテナ側に分離)
-- [ ] `docker compose up` でサンプルページが表示されることを確認する
-- [ ] ホットリロードが効くことを確認する(Next.js 16 は Turbopack がデフォルトで、Docker 内のファイル監視に未解決 issue あり。`WATCHPACK_POLLING=true` は webpack 用のため、効かない場合は開発時のみ `next dev --webpack` + `WATCHPACK_POLLING=true` にフォールバックする)
+- [x] 動作確認（2026-08-06 完了。下記 Dockerfile / compose 作成 → 起動 → ホットリロードまで一通り確認。詳細は作業ログ）
+- [x] 開発用 Dockerfile を作成する(`next dev` を実行する開発用途のもの)（2026-08-06 完了。`frontend/Dockerfile`）
+- [x] `compose.yaml` を作成する(ポート 3000 公開、ソースの bind mount、`node_modules` はコンテナ側に分離)（2026-08-06 完了。`frontend/compose.yaml`。`.next` も名前付きボリュームに分離した）
+- [x] `docker compose up` でサンプルページが表示されることを確認する（2026-08-06 完了。HTTP 200、`<title>Create Next App</title>` を確認）
+- [x] ホットリロードが効くことを確認する（2026-08-06 完了。**Turbopack のまま問題なく効いた**ため webpack へのフォールバックは不要だった）
 
 ### フェーズ2: Dev Container 化
 
@@ -69,7 +70,7 @@ npx create-next-app@latest frontend \
 - [ADR-0002: Node.js のバージョンを 24.x とし `package.json` の `engines` で固定する](../ADR/0002-Nodeバージョン.md) — ADR-0001 のフォローアップを具体化。ADR-0001 に依存する
 - [ADR-0003: フロントエンドのパッケージマネージャを npm とする](../ADR/0003-パッケージマネージャ.md) — ADR-0001 に依存する
 - [ADR-0004: Next.js プロジェクトの初期構成を create-next-app の推奨デフォルト + `src/` とする](../ADR/0004-Nextjsプロジェクト初期構成.md) — ADR-0001 / ADR-0003 に依存する
-- [ADR-0005: 開発時のバンドラを Turbopack のままとする](../ADR/0005-開発バンドラ.md) — ADR-0001 / ADR-0004 に依存する。Docker 上のホットリロードは未実測
+- [ADR-0005: 開発時のバンドラを Turbopack のままとする](../ADR/0005-開発バンドラ.md) — ADR-0001 / ADR-0004 に依存する。**Docker 上のホットリロードは 2026-08-06 に実測済み（問題なく動作、webpack へのフォールバックは不要）**
 - [ADR-0006: 開発用 Docker ベースイメージを `node:24-bookworm-slim` とする](../ADR/0006-開発用Dockerベースイメージ.md) — ADR-0001 / ADR-0002 に依存する
 - [検討記録: フロントエンド実行環境](../00_検討/20260804_フロントエンド実行環境.md)
 - 本メモ「決定事項」の根拠となる検討記録(論点ごとに分割):
@@ -114,4 +115,36 @@ docker run --rm -v "$PWD:/work" -w /work \
 
 - `npm run lint`: エラーなし
 - `npm run build`: 成功（Turbopack、2.7 秒でコンパイル、`/` と `/_not-found` を静的生成）
+
+## 2026-08-06 Docker 開発環境の構築と動作確認
+
+**作成したファイル**
+
+- `frontend/Dockerfile` — `node:24-bookworm-slim` ベース。`package.json` / `package-lock.json` だけ先に `COPY` して `npm ci` を走らせ、ソース変更のたびに依存を入れ直さずに済むようにした。`CMD` は `npm run dev -- -H 0.0.0.0`（`-H 0.0.0.0` がないとホストからアクセスできない）
+- `frontend/compose.yaml` — ポート 3000 を公開、`.:/app` を bind mount、`node_modules` と `.next` を名前付きボリュームに分離
+- `frontend/.dockerignore` — `node_modules` / `.next` / `.git`
+
+**`.next` も名前付きボリュームに分離した理由**（タスクメモの当初指定は `node_modules` のみ）
+
+bind mount だけだとホスト側の `.next`（`npm run build` の成果物）とコンテナ側の dev サーバーが同じディレクトリを奪い合う。書き込みも多いため、macOS の bind mount 経由にすると遅くなる。分離することで両方を避けられる。
+
+**起動と確認**
+
+```bash
+cd frontend
+docker compose up -d --build
+```
+
+- 起動ログ: `▲ Next.js 16.3.0 (Turbopack)` / `✓ Ready in 278ms`
+- `curl http://localhost:3000` → **HTTP 200**、`<title>Create Next App</title>` を確認
+
+**ホットリロードの実測（ADR-0005 の未実測項目）**
+
+`src/app/page.tsx` の見出し文字列を書き換えて `curl` し、変更が反映されるかを2回（変更 → 復元）確認した。
+
+- **いずれも即座に反映された。Turbopack のまま問題なく動作している。**
+- したがって **`next dev --webpack` + `WATCHPACK_POLLING=true` へのフォールバックは不要**だった
+- 環境: macOS（Apple Silicon）+ Docker Desktop 29.1.3。懸念していた Turbopack の Docker ファイル監視の未解決 issue（[#80665](https://github.com/vercel/next.js/issues/80665) ほか）は、この環境では再現しなかった
+- 検証はサーバー応答での確認まで。**ブラウザ上の Fast Refresh（画面が自動で切り替わる挙動）は目視での確認が必要**
+- 検証用の変更は元に戻し済み
 
