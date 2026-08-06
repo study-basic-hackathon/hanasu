@@ -8,13 +8,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **`frontend/` は Next.js プロジェクトを作成済み(2026-08-06)。`backend/` `infra/` は未実装(空)。** 未実装部分については `documents/` 配下の設計ドキュメントが唯一の情報源。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
 
-なお **ホストに Node は入っていない。** フロントエンドのコマンドはコンテナ内で実行する。Docker 開発環境(Dockerfile / compose.yaml / Dev Container)は整備中で、確定後にここへ起動・開発コマンドを追記する。それまでの暫定手段は以下。
+## フロントエンドの開発コマンド
+
+**ホストに Node は入っていない。すべてコンテナ内で実行する。** Dev Container 化(`.devcontainer/`)は未整備。
 
 ```bash
-# frontend/ で lint / build を実行する例
-docker run --rm -v "$PWD:/work" -w /work/frontend node:24-bookworm-slim npm run lint
-docker run --rm -v "$PWD:/work" -w /work/frontend node:24-bookworm-slim npm run build
+cd frontend
+
+# 開発サーバーを起動（http://localhost:3000）。ホットリロードは Turbopack のまま動作する
+docker compose up -d --build   # 初回・依存変更時
+docker compose up -d           # 2回目以降
+docker compose logs -f         # ログを追う
+docker compose down            # 停止
+
+# lint / build（Next.js 16 では next build が lint を実行しないため lint は個別に回す）
+docker compose run --rm web npm run lint
+docker compose run --rm web npm run build
 ```
+
+`node_modules` と `.next` は名前付きボリュームに分離してあるため、ホスト側には作られない。依存を追加したら `docker compose up -d --build` でイメージを作り直す。
 
 ## 技術スタック(予定)
 
