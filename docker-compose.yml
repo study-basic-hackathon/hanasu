@@ -1,21 +1,18 @@
 services:
-  # --- FastAPI アプリ ---
   api:
     build: ./backend
     ports:
-      - "8000:8000" # ホスト8000 → コンテナ8000
+      - "8000:8000"
     volumes:
-      - ./backend:/app # ソースをマウント → 保存で即反映（開発用）
+      - ./backend:/app
     environment:
       # DB 接続情報（app 側で os.getenv("DATABASE_URL") で受け取る想定）
       DATABASE_URL: postgresql+psycopg://hanasu:hanasu@db:5432/hanasu
     depends_on:
       db:
-        condition: service_healthy # db が起動しきってから api を立てる
-    # 開発中はコード変更を自動リロード（uvicorn は /opt/venv/bin にある = PATH で解決）
+        condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # --- PostgreSQL ---
   db:
     image: postgres:16-alpine
     environment:
@@ -23,9 +20,9 @@ services:
       POSTGRES_PASSWORD: hanasu
       POSTGRES_DB: hanasu
     ports:
-      - "5432:5432" # ローカルの DB クライアントから覗きたい時用
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data # データを永続化
+      - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hanasu"]
       interval: 5s
