@@ -7,10 +7,10 @@ from app.security import hash_password
 def seed_user():
     db = SessionLocal()
     try:
-        if not db.query(models.User).filter(models.User.login_id == "testuser").first():
+        if not db.query(models.User).filter(models.User.username == "testuser").first():
             db.add(
                 models.User(
-                    login_id="testuser",
+                    username="testuser",
                     password_hash=hash_password("testpass"),
                 )
             )
