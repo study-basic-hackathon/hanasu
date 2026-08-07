@@ -3,7 +3,6 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# 第2引数は保険
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+psycopg://hanasu:hanasu@db:5432/hanasu"
 )

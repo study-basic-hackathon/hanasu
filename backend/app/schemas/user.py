@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
 class UserOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)  #SQLAlchemyモデルからPydanticモデルの変換許可
+    model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
