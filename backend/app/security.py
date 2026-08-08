@@ -4,8 +4,10 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 
-# JWT の設定（本番は環境変数で秘密鍵を渡す。今はdev用の保険値）
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+# JWT の設定
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY が未設定です（環境変数で必ず設定してください）")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -16,7 +18,11 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     """入力パスワードが、保存されたハッシュと一致するか"""
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+    pw = password.encode()
+    # bcrypt(>=5.0)は72バイト超で ValueError を投げるので確認
+    if len(pw) > 72:
+        return False
+    return bcrypt.checkpw(pw, password_hash.encode())
 
 
 # --- JWT（トークン） ---
