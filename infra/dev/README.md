@@ -79,7 +79,7 @@ terraform destroy
 ```
 
 - `aws_ecr_repository.api`には`force_delete = true`が設定されているため、リポジトリ内にイメージが残っていてもエラーなく削除できます。
-- 一部リソースだけ壊したい場合は`-target`で絞り込みます(例: ECRだけ再作成したい場合)。
+- 一部リソースだけ壊したい場合は`-target`で絞り込みます(例: ECRだけ削除したい場合)。
 
   ```bash
   terraform destroy -target=aws_ecr_repository.api
