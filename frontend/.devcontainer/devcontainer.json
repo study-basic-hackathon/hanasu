@@ -1,0 +1,43 @@
+{
+  // VSCode の「Reopen in Container」で入る開発コンテナの定義。
+  // イメージ・ボリューム・ポートはすべて frontend/compose.yaml の web サービスを再利用する
+  // （Dev Container 用に別の Docker 定義を持つと、compose 起動時と設定がずれるため）。
+  "name": "hanasu-frontend",
+
+  "dockerComposeFile": ["../compose.yaml"],
+  "service": "web",
+
+  // Dockerfile の WORKDIR と揃える。node_modules / .next の名前付きボリュームもこの配下にある
+  "workspaceFolder": "/app",
+
+  // false = compose.yaml の CMD（npm run dev）をそのまま実行する。
+  // コンテナに入った時点で http://localhost:3000 が立ち上がっている状態にしたいため。
+  // 逆に dev サーバーが落ちるとコンテナごと停止する点に注意
+  "overrideCommand": false,
+
+  // compose.yaml で publish 済みだが、VSCode のポート一覧に出すために明記する
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js dev server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      // ホスト側に Node が無い前提のため、Lint / 補完に必要な拡張はコンテナ側に入れる
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        // VSCode 同梱版ではなくプロジェクトの TypeScript を使う（package.json のバージョンと一致させる）
+        "typescript.tsdk": "node_modules/typescript/lib",
+        // ESLint の設定ファイル（eslint.config.mjs）は /app 直下にある
+        "eslint.workingDirectories": ["/app"],
+        "editor.formatOnSave": false
+      }
+    }
+  }
+}

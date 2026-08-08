@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## フロントエンドの開発コマンド
 
-**ホストに Node は入っていない。すべてコンテナ内で実行する。** Dev Container 化(`.devcontainer/`)は未整備。
+**ホストに Node は入っていない。すべてコンテナ内で実行する。**
+
+### Docker Compose で動かす
 
 ```bash
 cd frontend
@@ -27,6 +29,15 @@ docker compose run --rm web npm run build
 ```
 
 `node_modules` と `.next` は名前付きボリュームに分離してあるため、ホスト側には作られない。依存を追加したら `docker compose up -d --build` でイメージを作り直す。
+
+### Dev Container で開発する
+
+`frontend/.devcontainer/devcontainer.json` を用意済み。VSCode で `frontend/` を開き「Reopen in Container」を実行すると、上記 `compose.yaml` の `web` サービスにそのまま入る(専用の Docker 定義は持たない)。
+
+- コンテナ内のワークスペースは `/app`。入った時点で `npm run dev` が動いており <http://localhost:3000> が開ける
+- 逆に dev サーバーが落ちるとコンテナごと停止する(`overrideCommand: false` のため)
+- ESLint / Tailwind CSS IntelliSense 拡張と、プロジェクトの TypeScript を使う設定はコンテナ側に入る
+- **マウントしているのは `frontend/` だけで `.git` は含まれない。git 操作はホスト側で行う**
 
 ## 技術スタック(予定)
 
