@@ -2,11 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.database import get_db
 from app.routers import auth
 from app.schemas.company import CompanyCreate, CompanyOut
+
 
 router = APIRouter()
 
@@ -32,7 +34,14 @@ def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], curren
 def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
     company = models.Company(name=company_in.name)
     db.add(company)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="この企業名は既に登録されています",
+        )
     db.refresh(company)
     return company
 
@@ -46,7 +55,14 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
             detail="企業情報が見つかりません",
         )
     company.name = company_in.name
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="この企業名は既に登録されています",
+        )
     db.refresh(company)
     return company
 
