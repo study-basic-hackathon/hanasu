@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 
 from app import models
@@ -6,7 +8,10 @@ from app.routers import auth , companies
 from app.seed import seed_user
 
 Base.metadata.create_all(bind=engine)
-seed_user()
+
+# 開発用のテストユーザー投入
+if os.getenv("SEED_DEV_USER", "").lower() == "true":
+    seed_user()
 
 app = FastAPI(title="hanasu API")
 

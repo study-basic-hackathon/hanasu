@@ -8,6 +8,10 @@ services:
     environment:
       # DB 接続情報（app 側で os.getenv("DATABASE_URL") で受け取る想定）
       DATABASE_URL: postgresql+psycopg://hanasu:hanasu@db:5432/hanasu
+      # JWT署名鍵（開発用。本番は本物の秘密鍵を別途設定する）
+      JWT_SECRET_KEY: dev-secret-change-me
+      # 開発用テストユーザーのseedを有効化
+      SEED_DEV_USER: "true"
     depends_on:
       db:
         condition: service_healthy
