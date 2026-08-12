@@ -6,7 +6,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 「hanasu」はハッカソン用のプロジェクトで、音声会話を録音・文字起こしし、話し方(抑揚・フィラー・声量・テンポ)を分析して評価・アドバイスを返すサービスを想定している。
 
-**現状はコード未実装の計画段階。** `backend/` `frontend/` `infra/` はすべて空(`.gitkeep` のみ)で、`documents/` 配下の設計ドキュメントが唯一の情報源。ビルド・テスト・lint コマンドはまだ存在しない。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
+**`frontend/` は Next.js プロジェクトを作成済み(2026-08-06)。`backend/` `infra/` は未実装(空)。** 未実装部分については `documents/` 配下の設計ドキュメントが唯一の情報源。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
+
+## フロントエンドの開発コマンド
+
+**ホストに Node は入っていない。すべてコンテナ内で実行する。**
+
+### Docker Compose で動かす
+
+```bash
+cd frontend
+
+# 開発サーバーを起動（http://localhost:3000）。ホットリロードは Turbopack のまま動作する
+docker compose up -d --build   # 初回・依存変更時
+docker compose up -d           # 2回目以降
+docker compose logs -f         # ログを追う
+docker compose down            # 停止
+
+# lint / build（Next.js 16 では next build が lint を実行しないため lint は個別に回す）
+docker compose run --rm web npm run lint
+docker compose run --rm web npm run build
+```
+
+`node_modules` と `.next` は名前付きボリュームに分離してあるため、ホスト側には作られない。依存を追加したら `docker compose up -d --build` でイメージを作り直す。
+
+### Dev Container で開発する
+
+`frontend/.devcontainer/devcontainer.json` を用意済み。VSCode で `frontend/` を開き「Reopen in Container」を実行すると、上記 `compose.yaml` の `web` サービスにそのまま入る(専用の Docker 定義は持たない)。
+
+- コンテナ内のワークスペースは `/app`。入った時点で `npm run dev` が動いており <http://localhost:3000> が開ける
+- 逆に dev サーバーが落ちるとコンテナごと停止する(`overrideCommand: false` のため)
+- ESLint / Tailwind CSS IntelliSense 拡張と、プロジェクトの TypeScript を使う設定はコンテナ側に入る
+- **マウントしているのは `frontend/` だけで `.git` は含まれない。git 操作はホスト側で行う**
 
 ## 技術スタック(予定)
 
@@ -33,7 +64,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## リポジトリ構成
 
 - `backend/` — Go バックエンド(未実装)
-- `frontend/` — Next.js フロントエンド(未実装)
+- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(`package.json` の `engines.node` で固定)。構成の根拠は ADR-0002〜0006
 - `infra/` — AWS インフラコード(未実装)
 - `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`frontend/01_design/`、`frontend/02_spec/` のサブディレクトリあり
 
