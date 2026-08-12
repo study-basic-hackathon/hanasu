@@ -19,6 +19,7 @@ resource "aws_security_group" "alb" {
 
   tags = {
     Name = "${local.name_prefix}-alb"
+    Env  = var.env
   }
 }
 
@@ -43,5 +44,6 @@ resource "aws_security_group" "ecs_task" {
 
   tags = {
     Name = "${local.name_prefix}-ecs-task"
+    Env  = var.env
   }
 }

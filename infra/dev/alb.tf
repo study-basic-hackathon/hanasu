@@ -8,6 +8,7 @@ resource "aws_lb" "main" {
 
   tags = {
     Name = "${local.name_prefix}-api"
+    Env  = var.env
   }
 }
 
