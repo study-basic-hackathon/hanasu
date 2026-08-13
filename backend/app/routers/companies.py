@@ -34,8 +34,8 @@ def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], curren
 def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
     company = models.Company(
         name=company_in.name,
-        motivation=company_in.motivation,
-        job_posting_url=company_in.job_posting_url,
+        application_reason=company_in.application_reason,
+        company_url=company_in.company_url,
         note=company_in.note,
     )
     db.add(company)
@@ -60,8 +60,8 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
             detail="企業情報が見つかりません",
         )
     company.name = company_in.name
-    company.motivation = company_in.motivation
-    company.job_posting_url = company_in.job_posting_url
+    company.application_reason = company_in.application_reason
+    company.company_url = company_in.company_url
     company.note = company_in.note
     try:
         db.commit()
