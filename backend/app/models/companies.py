@@ -13,5 +13,5 @@ class Company(Base):
     company_url = Column(String, nullable=True)
     # 備考（任意）
     note = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

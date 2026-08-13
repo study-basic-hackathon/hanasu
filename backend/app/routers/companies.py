@@ -35,7 +35,7 @@ def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db
     company = models.Company(
         name=company_in.name,
         application_reason=company_in.application_reason,
-        company_url=company_in.company_url,
+        company_url=str(company_in.company_url) if company_in.company_url else None,
         note=company_in.note,
     )
     db.add(company)
@@ -61,7 +61,7 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
         )
     company.name = company_in.name
     company.application_reason = company_in.application_reason
-    company.company_url = company_in.company_url
+    company.company_url = str(company_in.company_url) if company_in.company_url else None
     company.note = company_in.note
     try:
         db.commit()

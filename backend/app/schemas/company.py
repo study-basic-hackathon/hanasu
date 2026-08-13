@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, HttpUrl
 
 class CompanyCreate(BaseModel):
     name: str
     # 志望動機（必須・文字列で渡す）
     application_reason: str
-    # 企業URL（任意）
-    company_url: str | None = None
+    # 企業URL（任意・http(s) の正しいURLのみ受け付ける）
+    company_url: HttpUrl | None = None
     # 備考（任意）
     note: str | None = None
 
