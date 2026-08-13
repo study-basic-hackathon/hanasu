@@ -1,0 +1,37 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      # DB 接続情報（app 側で os.getenv("DATABASE_URL") で受け取る想定）
+      DATABASE_URL: postgresql+psycopg://hanasu:hanasu@db:5432/hanasu
+      # JWT署名鍵（開発用。本番は本物の秘密鍵を別途設定する）
+      JWT_SECRET_KEY: dev-secret-change-me
+      # 開発用テストユーザーのseedを有効化
+      SEED_DEV_USER: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hanasu
+      POSTGRES_PASSWORD: hanasu
+      POSTGRES_DB: hanasu
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanasu"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  db_data:
