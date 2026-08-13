@@ -32,7 +32,12 @@ def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], curren
 # 企業情報保存
 @router.post("/companies", response_model=CompanyOut, status_code=201)
 def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
-    company = models.Company(name=company_in.name)
+    company = models.Company(
+        name=company_in.name,
+        motivation=company_in.motivation,
+        job_posting_url=company_in.job_posting_url,
+        note=company_in.note,
+    )
     db.add(company)
     try:
         db.commit()
@@ -55,6 +60,9 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
             detail="企業情報が見つかりません",
         )
     company.name = company_in.name
+    company.motivation = company_in.motivation
+    company.job_posting_url = company_in.job_posting_url
+    company.note = company_in.note
     try:
         db.commit()
     except IntegrityError:
