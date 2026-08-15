@@ -48,6 +48,8 @@ docker tag hanasu-api:latest 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com/h
 docker push 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com/hanasu-api:latest
 ```
 
+`example-backend`はコンテナ起動時に`alembic upgrade head`→シーダー(`seed.py`)→`uvicorn`起動の順に実行する。DB接続情報(`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD`)はECSタスク定義から環境変数として渡している(`DB_USERNAME`/`DB_PASSWORD`はRDSのマスターパスワードSecretから注入)。動作確認は`curl http://<alb_dns_name>/items`で行う。
+
 ## 3. ECSに最新イメージを反映
 
 タスク定義は`:latest`タグを固定参照しているため、pushしただけではterraform上差分が出ず、稼働中のタスクにも反映されません。強制的に新しいイメージをpullさせます。
