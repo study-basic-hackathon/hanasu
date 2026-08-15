@@ -47,3 +47,28 @@ resource "aws_security_group" "ecs_task" {
     Env  = var.env
   }
 }
+
+resource "aws_security_group" "rds" {
+  name        = "${local.name_prefix}-rds"
+  description = "RDS: allow only from ECS task"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = local.db_port
+    to_port         = local.db_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_task.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-rds"
+    Env  = var.env
+  }
+}

@@ -22,3 +22,28 @@ variable "health_check_path" {
   type        = string
   description = "ALBターゲットグループのヘルスチェックパス"
 }
+
+variable "db_engine_version" {
+  type        = string
+  description = "RDS(PostgreSQL)のエンジンバージョン"
+}
+
+variable "db_instance_class" {
+  type        = string
+  description = "RDSインスタンスクラス"
+}
+
+variable "db_allocated_storage" {
+  type        = number
+  description = "RDSの割り当てストレージ(GB)"
+}
+
+variable "db_name" {
+  type        = string
+  description = "RDSに作成する初期データベース名"
+}
+
+variable "db_username" {
+  type        = string
+  description = "RDSマスターユーザー名"
+}

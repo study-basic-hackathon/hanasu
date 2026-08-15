@@ -72,6 +72,19 @@ ECSタスクの状態確認:
 aws ecs describe-services --cluster hanasu --services hanasu-api
 ```
 
+### RDSへの接続情報
+
+マスターパスワードはRDSが自動生成しSecrets Managerに保存している(`manage_master_user_password = true`)。エンドポイントとシークレットARNは`terraform output`から取得できる。
+
+```bash
+terraform output rds_endpoint
+aws secretsmanager get-secret-value \
+  --secret-id $(terraform output -raw rds_master_user_secret_arn) \
+  --query SecretString --output text | jq .
+```
+
+RDSは`aws_subnet.private`(IGWへのルートを持たないサブネット)に配置しており、`aws_security_group.rds`により`aws_security_group.ecs_task`からのアクセスのみ許可している。外部やインターネットからは到達不可。
+
 ## 5. インフラの破棄(destroy)
 
 ```bash
