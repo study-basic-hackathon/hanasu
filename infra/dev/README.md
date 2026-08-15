@@ -43,9 +43,12 @@ ECRへのログインは認証トークン発行後12時間有効です。トー
 aws ecr get-login-password --region ap-northeast-1 \
   | docker login --username AWS --password-stdin 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com
 
-docker build -t hanasu-api ./example-backend
-docker tag hanasu-api:latest 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com/hanasu-api:latest
-docker push 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com/hanasu-api:latest
+ECR_REPO=$(terraform output -raw ecr_repository_url)
+
+# provenance/sbom付きでbuildするとECRへのpushが403で失敗することがあるため無効化する
+docker build --provenance=false --sbom=false -t hanasu-api ./example-backend
+docker tag hanasu-api:latest "$ECR_REPO:latest"
+docker push "$ECR_REPO:latest"
 ```
 
 `example-backend`はコンテナ起動時に`alembic upgrade head`→シーダー(`seed.py`)→`uvicorn`起動の順に実行する。DB接続情報(`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD`)はECSタスク定義から環境変数として渡している(`DB_USERNAME`/`DB_PASSWORD`はRDSのマスターパスワードSecretから注入)。動作確認は`curl http://<alb_dns_name>/items`で行う。
@@ -56,8 +59,8 @@ docker push 926046660554.dkr.ecr.ap-northeast-1.amazonaws.com/hanasu-api:latest
 
 ```bash
 aws ecs update-service \
-  --cluster hanasu \
-  --service hanasu-api \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --service "$(terraform output -raw ecs_service_name)" \
   --force-new-deployment
 ```
 
@@ -66,12 +69,15 @@ aws ecs update-service \
 ```bash
 terraform output alb_dns_name
 curl http://$(terraform output -raw alb_dns_name)/
+curl http://$(terraform output -raw alb_dns_name)/items
 ```
 
 ECSタスクの状態確認:
 
 ```bash
-aws ecs describe-services --cluster hanasu --services hanasu-api
+aws ecs describe-services \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --services "$(terraform output -raw ecs_service_name)"
 ```
 
 ### RDSへの接続情報
