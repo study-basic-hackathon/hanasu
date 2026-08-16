@@ -7,8 +7,6 @@
 - 対応 Issue: [#27 \[frontend\]画面一覧・画面遷移図を決定する](https://github.com/study-basic-hackathon/hanasu/issues/27)
 - 関連: [画面一覧](screen_list.md)、[ユースケース・ユーザーフロー.md](../../ユースケース・ユーザーフロー.md)
 
-**[画面と API の対応](screen_api_map.md) は [#9](https://github.com/study-basic-hackathon/hanasu/issues/9)（PR #32）で作成中であり、まだ main にない。** 本書からのリンクは #32 のマージ後に有効になる。
-
 ## 1. 本書の位置づけ
 
 **[画面一覧](screen_list.md) が定めた14画面について、どの操作でどの画面へ移るかを定める。** 各画面の役割・表示情報は画面一覧が持ち、本書は遷移だけを扱う。
