@@ -22,7 +22,7 @@
 | API の実装（パス名の確定、スキーマの詳細） | [#25](https://github.com/study-basic-hackathon/hanasu/issues/25)、[#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
 | [必要api .md](<../../必要api .md>) 本体の更新 | [#25](https://github.com/study-basic-hackathon/hanasu/issues/25) |
 | 応募企業情報の項目定義 | [#17](https://github.com/study-basic-hackathon/hanasu/issues/17) |
-| 画面一覧そのものの改訂 | [#27](https://github.com/study-basic-hackathon/hanasu/issues/27)（本書 [7章](#7-画面一覧で見直しが要る点)が指摘元） |
+| 画面一覧そのものの改訂 | [#27](https://github.com/study-basic-hackathon/hanasu/issues/27)（本書 [7章](#7-画面一覧に反映した見直し)が指摘元。**反映済み**） |
 | 共通仕様（未認証時のリダイレクト、エラー表示、ローディング表示、マイク許可の拒否時の挙動） | [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の残りの範囲 |
 
 ## 2. 前提
@@ -160,11 +160,11 @@
 
 **3 と 5 は「画面の仕様」として決めないと実装できない。** [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の残りの範囲（各画面の詳細仕様）で扱う。
 
-## 7. 画面一覧で見直しが要る点
+## 7. 画面一覧に反映した見直し
 
-**[画面一覧](screen_list.md) は 2026-08-13 時点の決定に基づいており、その後の ADR-0011 とチーム会議の決定を反映していない。** 本書の作成中に判明した差分を挙げる。**反映は [#27](https://github.com/study-basic-hackathon/hanasu/issues/27) の担当。**
+**[画面一覧](screen_list.md) は 2026-08-13 時点の決定に基づいており、その後の ADR-0011 とチーム会議の決定を反映していなかった。** 本書の作成中に判明した差分を挙げる。**下記はすべて [#27](https://github.com/study-basic-hackathon/hanasu/issues/27)（PR #31）に反映済みである。**
 
-| 画面 | 現在の記述 | 見直しの内容 | 根拠 |
+| 画面 | 前版の記述 | 見直しの内容 | 根拠 |
 |---|---|---|---|
 | S-01 | 「サインイン / 会員登録」（切替式） | **会員登録を外す。** サインインのみ。メールアドレス欄も固定 ID に合わせて見直す | [ADR-0011](../../ADR/0011-会員登録と利用アカウント.md) |
 | S-02 / S-15 | プロフィール登録 / プロフィール編集 | **どちらも持たない。** 応募者自身の情報は応募企業情報（S-07）に集約する | [ユースケース](../../ユースケース・ユーザーフロー.md) 2.2 |
