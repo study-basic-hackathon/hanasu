@@ -44,8 +44,8 @@ docker compose run --rm web npm run build
 `documents/技術スタック.md` より:
 
 - **バックエンド**: Go(`backend/` に配置)
-- **フロントエンド**: TypeScript / Next.js(`frontend/` に配置、デプロイ先は Vercel)
-- **インフラ**: AWS(`infra/` に配置)— ECS、ECR、Lambda、Chime SDK、RDS(企業情報・プロフィール)、Bedrock
+- **フロントエンド**: TypeScript / Next.js(`frontend/` に配置、デプロイ先は **AWS Amplify Hosting**。ADR-0012 で Vercel から変更。Amplify の実構築は未着手)
+- **インフラ**: AWS(`infra/` に配置)— ECS、ECR、Lambda、Chime SDK、RDS(企業情報・プロフィール)、Bedrock、Amplify Hosting(フロントエンド)
 - **音声認識**: Whisper を検討中
 - 使わない想定: Cognito(認証は簡易的に実装)、S3
 
@@ -64,7 +64,7 @@ docker compose run --rm web npm run build
 ## リポジトリ構成
 
 - `backend/` — Go バックエンド(未実装)
-- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(`package.json` の `engines.node` で固定)。構成の根拠は ADR-0002〜0006
+- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(ローカルは `package.json` の `engines.node` とイメージタグで固定。Amplify 側の指定は構築時に決める — ADR-0012)。構成の根拠は ADR-0002〜0006 と ADR-0012
 - `infra/` — AWS インフラコード(未実装)
 - `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`frontend/01_design/`、`frontend/02_spec/` のサブディレクトリあり
 
