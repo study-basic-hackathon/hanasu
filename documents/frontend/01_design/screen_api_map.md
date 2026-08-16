@@ -52,7 +52,7 @@
 | `POST /token` | サインイン | — | **実装済** |
 | `GET /users/me` | サインイン中のユーザー情報取得 | 低 | **実装済**（[必要api .md](<../../必要api .md>) に記載なし） |
 | 応募企業情報 CRUD（Create / Read / Update / Delete） | 応募企業情報の登録・取得・更新・削除 | 高 | 記載済・未実装（[#11](https://github.com/study-basic-hackathon/hanasu/issues/11)） |
-| **応募企業情報の一覧取得（List）** | 登録済みの応募情報を全件引く | **高** | **本書の指摘により追加**（[5.2](#52-本書の指摘を受けて反映したもの) #2）。**[#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲外のため実装 Issue が未起票** |
+| **応募企業情報の一覧取得（List）** | 登録済みの応募情報を全件引く | **高** | **本書の指摘により追加**（[5.2](#52-本書の指摘を受けて反映したもの) #2）。**[#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲外** |
 | `POST /interviews/start` | 最初の質問を生成 | 任意（低） | 記載済・未実装 |
 | `POST /interviews/stt` | 文字起こし + フィラー数 + 話速 | **最優先** | 記載済・未実装（[#36](https://github.com/study-basic-hackathon/hanasu/issues/36)） |
 | `POST /interviews/chat` | 次の質問を生成 | 高 | 記載済・未実装。**入力に質問の強度を追加**（[5.2](#52-本書の指摘を受けて反映したもの) #1） |
@@ -187,8 +187,7 @@
 | 1 | **合否の目安の正式な基準。** 当面はクライアントが評価点数からハードコードで判定する | 後日（[#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の各画面詳細仕様 / 実装時） |
 | 2 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**フロント側に置かれる** | [ADR-0009](../../ADR/0009-評価方式.md) のフォローアップ（実装時） |
 | 3 | **本番モードのターン数の上限。** サーバーが終了フラグを持たないため、フロントが打ち切る | [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の各画面詳細仕様 |
-| 4 | **応募企業情報の List（一覧取得）の実装 Issue が未起票。** [#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲に含めないと決まったため、**現状どの Issue にも属していない** | 別 Issue の起票 |
-| 5 | **CLAUDE.md の記載是正。** バックエンドを **Go** としているが実装は Python / FastAPI。ほかに `backend/` `infra/` を「未実装(空)」としている点、API 一覧が更新前のままである点も実態と食い違う（**[技術スタック.md](../../技術スタック.md) は本 PR で是正済み**） | [#41](https://github.com/study-basic-hackathon/hanasu/issues/41)（起票済み。本 PR のマージ後に着手） |
+| 4 | **CLAUDE.md の記載是正。** バックエンドを **Go** としているが実装は Python / FastAPI。ほかに `backend/` `infra/` を「未実装(空)」としている点、API 一覧が更新前のままである点も実態と食い違う（**[技術スタック.md](../../技術スタック.md) は本 PR で是正済み**） | [#41](https://github.com/study-basic-hackathon/hanasu/issues/41)（起票済み。本 PR のマージ後に着手） |
 
 ## 9. 参考
 

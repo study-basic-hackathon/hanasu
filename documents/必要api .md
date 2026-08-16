@@ -29,7 +29,7 @@
     - 備考
       - **単体取得（Read）だけでは企業IDを知る手段がない。** モード選択の企業リスト、応募企業情報の一覧画面のいずれもこの API に依存する
       - ユーザーは1つのため、**絞り込みは行わず全件を返す**（[ADR-0011](ADR/0011-会員登録と利用アカウント.md)）
-      - **[#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲には含めない**と判断したため、実装 Issue は別途起票する
+      - **[#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲には含めない**と判断した（実装の割り当ては別途決める）
   - Update
     - inputs
       - 企業ID
