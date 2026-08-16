@@ -188,7 +188,7 @@
 | 2 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**フロント側に置かれる** | [ADR-0009](../../ADR/0009-評価方式.md) のフォローアップ（実装時） |
 | 3 | **本番モードのターン数の上限。** サーバーが終了フラグを持たないため、フロントが打ち切る | [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の各画面詳細仕様 |
 | 4 | **応募企業情報の List（一覧取得）の実装 Issue が未起票。** [#11](https://github.com/study-basic-hackathon/hanasu/issues/11) の範囲に含めないと決まったため、**現状どの Issue にも属していない** | 別 Issue の起票 |
-| 5 | **CLAUDE.md の記載是正。** バックエンドを **Go** としているが実装は Python / FastAPI。ほかに `backend/` `infra/` を「未実装(空)」としている点、API 一覧が更新前のままである点も実態と食い違う（**[技術スタック.md](../../技術スタック.md) は本 PR で是正済み**） | 別 Issue |
+| 5 | **CLAUDE.md の記載是正。** バックエンドを **Go** としているが実装は Python / FastAPI。ほかに `backend/` `infra/` を「未実装(空)」としている点、API 一覧が更新前のままである点も実態と食い違う（**[技術スタック.md](../../技術スタック.md) は本 PR で是正済み**） | [#41](https://github.com/study-basic-hackathon/hanasu/issues/41)（起票済み。本 PR のマージ後に着手） |
 
 ## 9. 参考
 
