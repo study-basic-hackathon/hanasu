@@ -56,6 +56,18 @@ export function ChatMessage({ turn }: { turn: ChatTurn }) {
   );
 }
 
+/** 面接官の応答待ち（S-08 6.1）。会話ログの末尾に置く */
+export function ThinkingMessage() {
+  return (
+    <div className="flex gap-3.5">
+      <Avatar label="面接" />
+      <div className="rounded-[2px_8px_8px_8px] border border-line bg-surface px-[18px] py-4 text-body text-ink-sub">
+        考えています
+      </div>
+    </div>
+  );
+}
+
 function Avatar({ label, muted }: { label: string; muted?: boolean }) {
   return (
     <div
