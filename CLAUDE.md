@@ -55,35 +55,18 @@ docker compose run --rm web npm run build
 
 ## API
 
-正本は `documents/必要api .md`(ファイル名に半角スペースを含む点に注意)。会話・評価まわりのエンドポイントは ADR-0008 で確定済み:
-
-- **認証 API**(`POST /token`)— ID/Password → JWT アクセストークン。**実装済み**
-- **応募情報 CRUD API** — 実態は「企業情報」ではなく**応募情報**(企業情報 + 志望動機 + 経歴を1レコードで持つ。ADR-0009)。Create / Read / **List(一覧取得)** / Update / Delete
-- **最初の質問 API**(`POST /interviews/start`)— **任意・優先度低。** 当面はフロントに固定文字列を持てば成立する
-- **音声文字起こし API**(`POST /interviews/stt`)— **実装最優先。** フィラートークン付きの生テキスト・整形済みテキスト・フィラー数・話速などを返す
-- **会話 API**(`POST /interviews/chat`)— **サーバーは会話状態を持たない**ため、会話履歴と質問の強度を毎回クライアントから送る。ストリーミングしない
-- **音声化 API**(`POST /interviews/tts`)— **任意。** 作らない場合は AI の返答を画面に文字表示するだけでよい
-- **評価実行 API**(`POST /evaluations`)— **非同期。** 実行だけ行い、結果は取得 API で受け取る。**定量はコード、定性は LLM**(ADR-0009)
-- **評価結果取得 API**(`GET /evaluations/{評価結果の保管ID}`)— 完了までクライアントがポーリングする
-- **評価履歴一覧取得 API**(`GET /evaluations`)— 企業で絞り込まず全件返す
-
-制約:
-
-- **全 API に JWT Bearer が要る。** ただし認証 API(`POST /token`)だけは未認証で実行できる
-- **会員登録 API は作らない**(固定の ID / パスワード1組。ADR-0011)
-- **サインアウト API は作らない**(トークンの破棄はクライアント側で行う)
+API の一覧と入出力仕様は `documents/backend/API仕様.md` が正本(会話・評価まわりの構成は ADR-0008 で確定済み)。
 
 ## リポジトリ構成
 
 - `backend/` — Python / FastAPI バックエンド。アプリコードは `app/` 配下(`routers/` `models/` `schemas/`)。**認証 API(`POST /token` / `GET /users/me`)まで実装済み。** DB は PostgreSQL(SQLAlchemy + psycopg)、Python は 3.14、依存は `pyproject.toml` / `uv.lock`(uv)で管理。リポジトリ直下の `docker-compose.yml` が API と DB をまとめて起動する
 - `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(ローカルは `package.json` の `engines.node` とイメージタグで固定。Amplify 側の指定は構築時に決める — ADR-0012)。構成の根拠は ADR-0002〜0006 と ADR-0012
 - `infra/` — AWS インフラコード(Terraform)。`bootstrap/`(state 用 S3 バケット)と `dev/`(VPC / ALB / ECR / ECS Fargate)。**RDS・Bedrock はまだ定義していない。** 構築から破棄までの手順は `infra/dev/README.md`
-- `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`frontend/01_design/`、`frontend/02_spec/` のサブディレクトリあり
+- `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`backend/`、`frontend/01_design/` のサブディレクトリあり。**書き方のルールは `documents/README.md`**
 
 ## 規約
 
 - ドキュメント・コミュニケーションは日本語
 - コミットメッセージは `add:` `fix:` などのプレフィックス + 日本語の要約(例: `add: 必要API`)
 - ブランチ名は  `feature/<内容>` 形式
-- 設計検討の記録(ディスカッション記録)は `documents/00_検討/` に `YYYYMMDD_<トピック>.md` 形式で保存する
-- 確定したアーキテクチャ上の意思決定は ADR として `documents/ADR/` に `NNNN-<トピック>.md` 形式(連番)で保存する。1 ADR = 1 決定。構成は `documents/ADR/0001-フロントエンド実行環境.md` を雛形とする
+- **ドキュメントを追加・更新するときは `documents/README.md` に従う**(正本の所在・仕様書に書かないことの基準・配置と命名。ADR-0013)
