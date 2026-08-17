@@ -7,8 +7,6 @@
 - 対応 Issue: [#9 \[frontend\]画面仕様書作成](https://github.com/study-basic-hackathon/hanasu/issues/9)
 - 関連: [画面一覧](screen_list.md)、[画面遷移図](screen_flow.md)、[ユースケース・ユーザーフロー.md](../../ユースケース・ユーザーフロー.md)、[必要api .md](<../../必要api .md>)
 
-**[画面一覧](screen_list.md) と [画面遷移図](screen_flow.md) は [#27](https://github.com/study-basic-hackathon/hanasu/issues/27)（PR #31）で作成中であり、まだ main にない。** 本書のリンクは #31 のマージ後に有効になる。
-
 ## 1. 本書の位置づけ
 
 **[画面一覧](screen_list.md) の各画面がどの API を呼ぶかを定める。** [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の完了条件「画面と API の対応表があり、[必要api .md](<../../必要api .md>) との過不足が洗い出されている」に対応する。
