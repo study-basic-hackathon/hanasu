@@ -1,3 +1,5 @@
+> **本書は必要な API のメモであり、仕様の正本ではない。** API の一覧と入出力仕様の正本は [documents/backend/API仕様.md](backend/API仕様.md)。
+
 ## 必要API一覧
 
 会話練習に関する API は [ADR-0008](ADR/0008-会話用APIの構成.md) で確定した。パス名は実装時に確定する。
