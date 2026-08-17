@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "bcrypt>=5.0.0",
     "fastapi>=0.141.1",
+    "openai>=3.1.0",
     "psycopg[binary]>=3.3.4",
     "pyjwt>=2.13.0",
     "python-multipart>=0.0.32",

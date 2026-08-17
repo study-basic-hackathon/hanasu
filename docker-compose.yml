@@ -12,6 +12,8 @@ services:
       JWT_SECRET_KEY: dev-secret-change-me
       # 開発用テストユーザーのseedを有効化
       SEED_DEV_USER: "true"
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
