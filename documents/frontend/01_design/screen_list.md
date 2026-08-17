@@ -12,7 +12,7 @@
 | 全画面に共通する仕様（グローバルヘッダー、未認証時のリダイレクト、エラー表示、ローディング表示、マイク許可が拒否された場合の挙動） | [共通仕様](screen_common.md) |
 | 画面と API の対応 | [画面と API の対応](screen_api_map.md) |
 | 見た目（寸法・配色・余白・文字サイズ） | [デザイン原本](screen_design.html)。抜粋した基本値は [共通仕様](screen_common.md) |
-| UI ライブラリの選定 | [#16](https://github.com/study-basic-hackathon/hanasu/issues/16) |
+| UI ライブラリ・デザイントークン・共通部品の実装方針 | [ADR-0014](../../ADR/0014-UI技術方針.md) |
 | 応募企業情報の各項目の型・制約 | [#17](https://github.com/study-basic-hackathon/hanasu/issues/17) |
 
 ## 2. 前提
@@ -27,7 +27,7 @@
 | 6 | **評価指標は話の速さ・フィラーの数・構成/内容の3つ**（任意で間の長さ）。**「抑揚」「滑舌」「声の大きさ」は評価しない** | [ADR-0009](../../ADR/0009-評価方式.md) |
 | 7 | **評価は非同期。** 結果が出るまで画面がポーリングする | [ADR-0008](../../ADR/0008-会話用APIの構成.md) |
 
-**対応デバイスは PC のみとする。** [#16](https://github.com/study-basic-hackathon/hanasu/issues/16) に残るのは UI ライブラリの選定である。
+**対応デバイスは PC のみとする。**
 
 ## 3. 画面一覧
 

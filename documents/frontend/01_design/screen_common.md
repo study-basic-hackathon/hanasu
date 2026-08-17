@@ -17,7 +17,7 @@
 | 画面と画面のつながり | [画面遷移図](screen_flow.md) |
 | 各画面が呼ぶ API | [画面と API の対応](screen_api_map.md) |
 | API の入出力 | [API仕様.md](../../backend/API仕様.md) |
-| UI ライブラリの選定 | [#16](https://github.com/study-basic-hackathon/hanasu/issues/16) |
+| UI ライブラリ・デザイントークン・共通部品の実装方針 | [ADR-0014](../../ADR/0014-UI技術方針.md) |
 
 ## 2. 前提
 
@@ -225,7 +225,6 @@
 | # | 未決事項 | 決めるべき場所 |
 |---:|---|---|
 | 1 | **定量スコアの点数化基準**（「284 文字/分は何点か」「フィラー 12 回は何点か」）。**本書はスコアの見せ方だけを定め、点数の作り方は定めない** | [ADR-0009](../../ADR/0009-評価方式.md) のフォローアップ（実装時） |
-| 2 | UI ライブラリの選定 | [#16](https://github.com/study-basic-hackathon/hanasu/issues/16) |
 
 ## 13. 参考
 
