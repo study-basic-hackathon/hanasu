@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-「hanasu」はハッカソン用のプロジェクトで、音声会話を録音・文字起こしし、話し方(抑揚・フィラー・声量・テンポ)を分析して評価・アドバイスを返すサービスを想定している。
+「hanasu」はハッカソン用のプロジェクトで、面接を想定した AI との音声会話を録音・文字起こしし、話し方(話速・フィラー)と内容(構成・中身)を分析して評価・アドバイスを返すサービス。**「抑揚」「声の大きさ」は評価指標に採らない**(ADR-0009)。
 
-**`frontend/` は Next.js プロジェクトを作成済み(2026-08-06)。`backend/` `infra/` は未実装(空)。** 未実装部分については `documents/` 配下の設計ドキュメントが唯一の情報源。コードが追加されたら、この CLAUDE.md にコマンドを追記すること。
+**`frontend/`(Next.js)`backend/`(FastAPI)`infra/`(Terraform)はいずれも実装に着手済み。** ただしこの CLAUDE.md に書いてある開発コマンドはフロントエンドのぶんだけで、**`backend/` `infra/` の開発コマンドは未記載**(動かし方を確認したうえで別途追記する)。未実装の仕様については `documents/` 配下の設計ドキュメントが唯一の情報源。
 
 ## フロントエンドの開発コマンド
 
@@ -39,33 +39,45 @@ docker compose run --rm web npm run build
 - ESLint / Tailwind CSS IntelliSense 拡張と、プロジェクトの TypeScript を使う設定はコンテナ側に入る
 - **マウントしているのは `frontend/` だけで `.git` は含まれない。git 操作はホスト側で行う**
 
-## 技術スタック(予定)
+## 技術スタック
 
-`documents/技術スタック.md` より:
+正本は `documents/技術スタック.md`。以下はその要約:
 
-- **バックエンド**: Go(`backend/` に配置)
+- **バックエンド**: Python / FastAPI(`backend/` に配置、デプロイ先は AWS ECS(Fargate))
 - **フロントエンド**: TypeScript / Next.js(`frontend/` に配置、デプロイ先は **AWS Amplify Hosting**。ADR-0012 で Vercel から変更。Amplify の実構築は未着手)
-- **インフラ**: AWS(`infra/` に配置)— ECS、ECR、Lambda、Chime SDK、RDS(企業情報・プロフィール)、Bedrock、Amplify Hosting(フロントエンド)
-- **音声認識**: Whisper を検討中
-- 使わない想定: Cognito(認証は簡易的に実装)、S3
+- **インフラ**: AWS(`infra/` に配置)— VPC、ALB、ECR、ECS、RDS(**応募情報・評価結果**。ADR-0009)、CloudWatch Logs、Bedrock(会話の質問生成と評価の定性項目。ADR-0010)、S3(Terraform の state 管理用)、Amplify Hosting(フロントエンド)。IaC は Terraform、CI/CD は GitHub Actions
+- **音声認識**: **AmiVoice**(ADR-0010)。`keepFillerToken=1` を付けてフィラーを保持したまま文字起こしする**商用の外部 API**
+- 使わない想定:
+  - Cognito — 認証は簡易的。**会員登録は実装せず、固定の ID / パスワード1組を使う**(ADR-0011)
+  - S3(音声データ)— **音声はブラウザの IndexedDB に一時保持し、サーバーは処理後に破棄する**(ADR-0007)。会話履歴・音声・文字起こしは DB にも保存しない
+  - Chime SDK — **1対1かつ相手が AI のため、代替不能な機能がない。** 音声はブラウザの `MediaRecorder` で取得しターンごとに HTTP で送る(ADR-0007)
+  - NAT Gateway — コスト削減のため ECS タスクは Public サブネットに直接配置する
 
-## 予定している API
+## API
 
-`documents/必要api .md`(ファイル名に半角スペースを含む点に注意)より:
+正本は `documents/必要api .md`(ファイル名に半角スペースを含む点に注意)。会話・評価まわりのエンドポイントは ADR-0008 で確定済み:
 
-- 認証 API(ID/Password → 認証結果)
-- 企業情報 CRUD API
-- 音声認識 API(文字起こし + 音声分析: 抑揚・フィラー・声の大きさ・スピード)— 分割の可能性あり
-- 内容評価 API(文字起こし・話し方情報 → 評価点数とアドバイス)
-- 会話用 API(詳細未定)
+- **認証 API**(`POST /token`)— ID/Password → JWT アクセストークン。**実装済み**
+- **応募情報 CRUD API** — 実態は「企業情報」ではなく**応募情報**(企業情報 + 志望動機 + 経歴を1レコードで持つ。ADR-0009)。Create / Read / **List(一覧取得)** / Update / Delete
+- **最初の質問 API**(`POST /interviews/start`)— **任意・優先度低。** 当面はフロントに固定文字列を持てば成立する
+- **音声文字起こし API**(`POST /interviews/stt`)— **実装最優先。** フィラートークン付きの生テキスト・整形済みテキスト・フィラー数・話速などを返す
+- **会話 API**(`POST /interviews/chat`)— **サーバーは会話状態を持たない**ため、会話履歴と質問の強度を毎回クライアントから送る。ストリーミングしない
+- **音声化 API**(`POST /interviews/tts`)— **任意。** 作らない場合は AI の返答を画面に文字表示するだけでよい
+- **評価実行 API**(`POST /evaluations`)— **非同期。** 実行だけ行い、結果は取得 API で受け取る。**定量はコード、定性は LLM**(ADR-0009)
+- **評価結果取得 API**(`GET /evaluations/{評価結果の保管ID}`)— 完了までクライアントがポーリングする
+- **評価履歴一覧取得 API**(`GET /evaluations`)— 企業で絞り込まず全件返す
 
-制約: 認証済みユーザーのみ API 実行可能。
+制約:
+
+- **全 API に JWT Bearer が要る。** ただし認証 API(`POST /token`)だけは未認証で実行できる
+- **会員登録 API は作らない**(固定の ID / パスワード1組。ADR-0011)
+- **サインアウト API は作らない**(トークンの破棄はクライアント側で行う)
 
 ## リポジトリ構成
 
-- `backend/` — Go バックエンド(未実装)
+- `backend/` — Python / FastAPI バックエンド。アプリコードは `app/` 配下(`routers/` `models/` `schemas/`)。**認証 API(`POST /token` / `GET /users/me`)まで実装済み。** DB は PostgreSQL(SQLAlchemy + psycopg)、Python は 3.14、依存は `pyproject.toml` / `uv.lock`(uv)で管理。リポジトリ直下の `docker-compose.yml` が API と DB をまとめて起動する
 - `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(ローカルは `package.json` の `engines.node` とイメージタグで固定。Amplify 側の指定は構築時に決める — ADR-0012)。構成の根拠は ADR-0002〜0006 と ADR-0012
-- `infra/` — AWS インフラコード(未実装)
+- `infra/` — AWS インフラコード(Terraform)。`bootstrap/`(state 用 S3 バケット)と `dev/`(VPC / ALB / ECR / ECS Fargate)。**RDS・Bedrock はまだ定義していない。** 構築から破棄までの手順は `infra/dev/README.md`
 - `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`frontend/01_design/`、`frontend/02_spec/` のサブディレクトリあり
 
 ## 規約
