@@ -1,26 +1,49 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * デザイントークン（ADR-0014）。
+ * 値は documents/frontend/01_design/screen_common.md 11章から採る。
+ * 見た目の正本はデザイン原本（screen_design.html）であり、ここはその基本値を写したもの。
+ */
+@theme {
+  /* 色（共通仕様 11.1） */
+  --color-accent: #0f766e; /* 主要な操作・現在地・リンク */
+  --color-accent-soft: #f2f8f7; /* 選択中の行・カード */
+  --color-canvas: #f6f7f8; /* 画面の背景 */
+  --color-surface: #ffffff; /* カードの背景 */
+  --color-line: #e2e5e8; /* 枠線（カード） */
+  --color-line-strong: #d5d9dd; /* 枠線（入力欄・副次のボタン） */
+  --color-divider: #edf0f2; /* 区切り線（カードの内側） */
+  --color-ink: #14181c; /* 文字（主） */
+  --color-ink-label: #3d474f; /* 文字（ラベル） */
+  --color-ink-sub: #5c666e; /* 文字（副） */
+  --color-ink-muted: #8a949c; /* 文字（補助・単位） */
+  --color-warning: #c47f0f; /* 注意 */
+  --color-danger: #b3261e; /* 危険・エラー・録音中 */
+  --color-track: #e7eaec; /* スコアバーの下地（共通仕様 9章） */
+
+  /* 文字（共通仕様 11.2） */
+  --text-heading: 22px; /* 画面見出し（h1） */
+  --text-card: 15px; /* カードの見出し */
+  --text-card-sm: 13px; /* カードの見出し（小） */
+  --text-body: 14px; /* 本文・入力値 */
+  --text-body-sm: 13px; /* 本文（小） */
+  --text-label: 12px; /* ラベル */
+  --text-note: 11px; /* 補助・注記 */
+  --text-score-total: 30px; /* 総合スコア（S-14） */
+  --text-score-item: 38px; /* 項目別スコア（S-14） */
+
+  /* 部品（共通仕様 11.3） */
+  --radius-card: 6px;
+  --radius-control: 4px; /* ボタン・入力欄 */
+  --radius-chip: 3px; /* チップ・バッジ */
+  --spacing-header: 60px; /* グローバルヘッダーの高さ（共通仕様 4章） */
+  --spacing-btn: 44px; /* 主要なボタン */
+  --spacing-btn-sm: 40px; /* 副次のボタン */
+  --spacing-field: 42px; /* 入力欄（1行） */
 }
 
+/* フォントは Noto Sans JP（共通仕様 11.2）。変数は layout.tsx の next/font が与える */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  --font-sans: var(--font-noto-sans-jp), system-ui, sans-serif;
 }
