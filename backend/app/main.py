@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app import models
 from app.database import Base, engine
-from app.routers import auth , companies
+from app.routers import auth , companies , interviews
 from app.seed import seed_user
 
 Base.metadata.create_all(bind=engine)
@@ -17,6 +17,7 @@ app = FastAPI(title="hanasu API")
 
 app.include_router(auth.router)
 app.include_router(companies.router)
+app.include_router(interviews.router)
 
 @app.get("/")
 def root():
