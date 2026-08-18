@@ -1,12 +1,10 @@
 import os
 
-# LLM呼び出しレイヤー（Bedrock 経由で Claude を呼ぶ）。
-# ルーターはこの generate_reply() だけを呼ぶ。プロバイダの都合はこのファイルに閉じ込める。
+# LLM呼び出しレイヤー
 #
 # 認証は AWS のクレデンシャルチェーン任せ:
 #   - ローカル: .env の AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY（compose が渡す）
-#   - ECS: タスクロール(#28)で自動取得（環境変数不要）
-
+#   - ECS: タスクロールで自動取得
 
 def generate_reply(system: str, history: list[dict]) -> str:
     """system プロンプト＋会話履歴から、面接官の次の発言を1つ生成して返す。
@@ -16,16 +14,24 @@ def generate_reply(system: str, history: list[dict]) -> str:
     import anthropic
     from anthropic import AnthropicBedrockMantle  # 遅延import
 
-    client = AnthropicBedrockMantle(aws_region=os.getenv("AWS_REGION", "ap-northeast-1"))
+    # 既定値（タイムアウト10分・リトライ2回）だと障害時にワーカーを長時間占有するため明示する。
+    # 最悪ケースは60秒
+    client = AnthropicBedrockMantle(
+        aws_region=os.getenv("AWS_REGION", "ap-northeast-1"),
+        timeout=30.0,
+        max_retries=1,
+    )
 
     # Anthropic API は最初のメッセージが user である必要がある。
-    # 履歴が空（面接の1問目）はキックオフ用の user メッセージを立てる。
-    messages = history or [{"role": "user", "content": "面接を開始してください。最初の質問をお願いします。"}]
+    # 履歴は面接官(assistant)の質問から始まるため、キックオフ用の user メッセージを常に先頭に置く。
+    kickoff = {"role": "user", "content": "面接を開始してください。最初の質問をお願いします。"}
+    messages = [kickoff, *history]
 
     try:
         response = client.messages.create(
-            # Bedrock のモデルIDは "anthropic." プレフィックス付き
-            model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-opus-4-8"),
+            # Bedrock のモデルIDは "anthropic." プレフィックス付き。
+            # getenv の第2引数でなく or なのは、compose が未設定時に空文字を注入するため（空でもフォールバックさせる）
+            model=os.getenv("BEDROCK_MODEL_ID") or "anthropic.claude-opus-4-8",
             max_tokens=300,
             system=system,
             messages=messages,
