@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "hanasu API backend"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.19.1",
     "anthropic[bedrock]>=0.122.0",
     "bcrypt>=5.0.0",
     "fastapi>=0.141.1",

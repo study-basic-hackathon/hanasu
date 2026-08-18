@@ -245,14 +245,15 @@ audio: <録音した音声 (webm/opus)>
 
 | テーブル | カラム | 備考 |
 |---|---|---|
-| `users` | `id` (PK) / `username` / `password_hash` / `created_at` | 固定アカウント1つ |
-| `applications`（応募情報） | `id` (PK) / `company_name` / `company_info` / `motivation` / `resume` / `created_at` | 企業情報 + 志望動機 + 経歴を1レコードで持つ |
+| `users` | `id` (PK) / `username` / `password_hash` | 固定アカウント1つ |
+| `applications`（応募情報） | `id` (PK) / `company_name` / `company_info` / `motivation` / `resume` | 企業情報 + 志望動機 + 経歴を1レコードで持つ |
 | `evaluations`（評価結果） | `evaluation_id` (PK) / `company_id` (FK + INDEX) / `status` / `total_score` / `scores` (JSON) / `advice` (JSON) / `created_at` | `status` は `processing` / `completed` / `failed` |
 
 - **`evaluations` の PK は `evaluation_id` 単体。** `GET /evaluations/{evaluation_id}` で引く以上、これ単体で一意に特定できる必要がある
 - **`evaluations.company_id` は NULL を許す**（チュートリアルの評価は応募情報を持たないため）
 - **`session_id` は持たない。** 1セッション = 1評価であり `evaluation_id` と 1:1 になる
 - **`user_id` は持たない。** ユーザーを1つしか用意しないため
+- **作成日時・更新日時は必須としない。** 画面が使う日時は `evaluations.created_at`（練習の実施日時）だけである。**`users` / `applications` に持たせるかどうかは実装に委ねる**（[画面と API の対応](../frontend/01_design/screen_api_map.md) 6章）
 
 ## 7. 未確定事項
 
@@ -263,11 +264,12 @@ audio: <録音した音声 (webm/opus)>
 | 1 | **パス名と ID の命名。** `/interviews/*` に揃えるか、`company_id` を `application_id` に改める（既存 API は `/token` `/users/me` とプレフィックスなし） | 各 API の実装時 |
 | 2 | **応募情報の項目定義**（企業名以外の入力項目と、CRUD の入出力の中身） | [#17](https://github.com/study-basic-hackathon/hanasu/issues/17) |
 | 3 | **質問強度のフィールド名と値の表記**（楽々 / 標準 / 厳しめ をどう表すか） | 会話 API の実装時 |
-| 4 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**クライアント側に置かれる** | [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の各画面詳細仕様 / 実装時 |
+| 4 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**クライアント側に置かれる** | [ADR-0009](../ADR/0009-評価方式.md) のフォローアップ（実装時） |
 | 5 | **「間の長さ」を評価に加える場合の `scores` のキー**と、項目別スコア表示との対応 | 実装時 |
 | 6 | **フィラーの定義範囲。** `keepFillerToken=1` が期待どおり効くか、「なんか」「まあ」等を含めるか | [#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
 | 7 | **非同期処理の実装方式**（`BackgroundTasks` / ワーカー分離）とポーリング間隔 | 評価 API の実装時 |
 | 8 | **TTS のサービス選定**（Amazon Polly / 外部 API など） | TTS を作ると決めた時点 |
+| 9 | **画面のために加えることが決まった項目**（評価結果の企業名・質問の強度・ターン数、評価履歴一覧の企業と項目別スコア）。**新しいエンドポイントは増えない** | [画面と API の対応](../frontend/01_design/screen_api_map.md) 6章に一覧がある。**本書への反映は各 API の実装時** |
 
 ## 8. 参考
 
