@@ -1,0 +1,10 @@
+# 環境変数・シークレット
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+
+# OS
+.DS_Store
