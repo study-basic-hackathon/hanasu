@@ -13,7 +13,6 @@ class ChatRequest(BaseModel):
     company_id: int        # 応募情報（企業情報・志望動機）はサーバーがここから読む
     history: list[Turn] = Field(max_length=50)
 
-    # 履歴は「面接官の質問に回答した状態」でしか送れない（最後が assistant だと LLM が質問の続きを書いてしまう）
     @model_validator(mode="after")
     def history_must_end_with_user(self):
         if self.history and self.history[-1].role != "user":
