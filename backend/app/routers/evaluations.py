@@ -69,10 +69,11 @@ def create_evaluation(
         company_name = company.name 
 
     evaluation = models.Evaluation(
+        user_id=current_user.id,
         company_id=eval_in.company_id,
         company_name=company_name,
         status="processing",
-        scores=eval_in.scores, 
+        scores=eval_in.scores,
     )
     db.add(evaluation)
     db.commit()
@@ -89,9 +90,10 @@ def list_evaluations(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[models.User, Depends(auth.get_current_user)],
 ):
-    """評価履歴を新しい順に全件返す。企業では絞り込まない（チュートリアルの結果も含む）。"""
+    """自分の評価履歴を新しい順に全件返す。企業では絞り込まない（チュートリアルの結果も含む）。"""
     rows = (
         db.query(models.Evaluation)
+        .filter(models.Evaluation.user_id == current_user.id)
         .order_by(models.Evaluation.created_at.desc(), models.Evaluation.evaluation_id.desc())
         .all()
     )
@@ -108,7 +110,14 @@ def get_evaluation(
 
     completed になるまでクライアントがポーリングする想定。
     """
-    ev = db.get(models.Evaluation, evaluation_id)
+    ev = (
+        db.query(models.Evaluation)
+        .filter(
+            models.Evaluation.evaluation_id == evaluation_id,
+            models.Evaluation.user_id == current_user.id,
+        )
+        .first()
+    )
     if ev is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="評価結果が見つかりません")
 

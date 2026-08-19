@@ -14,6 +14,8 @@ class Evaluation(Base):
     __tablename__ = "evaluations"
 
     evaluation_id = Column(Integer, primary_key=True)
+    # 評価の持ち主
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     # 対象企業。チュートリアルの評価は持たない。企業が削除されたら NULL になる（履歴は残す）
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True)
     # 登録時の企業名の写し。企業の削除・改名後も履歴にその時点の名前を出すために持つ

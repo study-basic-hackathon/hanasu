@@ -28,9 +28,14 @@ def seed_evaluations():
     try:
         if db.query(models.Evaluation).first():
             return
+        # 評価の持ち主は seed_user が入れた testuser（seed_user が先に実行される前提）
+        user = db.query(models.User).filter(models.User.username == "testuser").first()
+        if user is None:
+            return
         db.add_all(
             [
                 models.Evaluation(
+                    user_id=user.id,
                     company_name="テスト株式会社",
                     status="completed",
                     total_score=72,
@@ -43,6 +48,7 @@ def seed_evaluations():
                 ),
                 models.Evaluation(
                     # チュートリアル（企業なし）
+                    user_id=user.id,
                     status="completed",
                     total_score=65,
                     scores={
@@ -52,8 +58,8 @@ def seed_evaluations():
                     },
                     advice=["主張のあとに理由を一言添えると説得力が上がります"],
                 ),
-                models.Evaluation(status="processing"),
-                models.Evaluation(status="failed", error="LLM 呼び出しに失敗しました"),
+                models.Evaluation(user_id=user.id, status="processing"),
+                models.Evaluation(user_id=user.id, status="failed", error="LLM 呼び出しに失敗しました"),
             ]
         )
         db.commit()
