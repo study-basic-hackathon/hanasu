@@ -80,6 +80,11 @@ def evaluate_interview(company_name: str | None, turns: list[dict]) -> dict:
         system, [{"role": "user", "content": transcript or "（会話なし）"}], max_tokens=1000, timeout=60.0
     )
     try:
-        return json.loads(text)
+        result = json.loads(text)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"LLM の評価結果を JSON として読めませんでした: {text[:200]}") from e
+
+    # json.loads は配列や数値でも通るため、dict であることだけ確認する
+    if not isinstance(result, dict):
+        raise RuntimeError(f"LLM の評価結果が想定した形ではありません: {text[:200]}")
+    return result

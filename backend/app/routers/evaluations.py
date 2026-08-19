@@ -38,8 +38,7 @@ def _run_evaluation(evaluation_id: int, company_name: str | None, turns: list[di
             ev.advice = qualitative.get("advice") or []
             ev.total_score = round(sum(nums) / len(nums)) if nums else None
             ev.status = "completed"
-        except RuntimeError as e:
-            # failed を立てないとクライアントが永久にポーリングし続ける
+        except Exception as e:
             ev.error = str(e)
             ev.status = "failed"
         db.commit()
