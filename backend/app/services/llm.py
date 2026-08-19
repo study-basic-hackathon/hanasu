@@ -7,7 +7,7 @@ import os
 #   - ECS: タスクロールで自動取得
 
 
-def _create_message(system: str, messages: list[dict], max_tokens: int, timeout: float) -> str:
+def _call_bedrock(system: str, messages: list[dict], max_tokens: int, timeout: float) -> str:
     """Bedrock を1回呼んで応答テキストを返す。失敗は分かるメッセージの RuntimeError に変換する。"""
     import anthropic
     from anthropic import AnthropicBedrockMantle  # 遅延import
@@ -52,4 +52,4 @@ def generate_reply(system: str, history: list[dict]) -> str:
     # Anthropic API は最初のメッセージが user である必要がある。
     # 履歴は面接官(assistant)の質問から始まるため、キックオフ用の user メッセージを常に先頭に置く。
     kickoff = {"role": "user", "content": "面接を開始してください。最初の質問をお願いします。"}
-    return _create_message(system, [kickoff, *history], max_tokens=300, timeout=30.0)
+    return _call_bedrock(system, [kickoff, *history], max_tokens=300, timeout=30.0)
