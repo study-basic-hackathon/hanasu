@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnswerPanel } from "@/components/interview/AnswerPanel";
-import { ChatMessage } from "@/components/interview/ChatMessage";
+import { ChatMessage, ThinkingMessage } from "@/components/interview/ChatMessage";
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -50,6 +50,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   );
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
   const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const answeredTurns = turns.filter((turn) => turn.role === "user").length;
@@ -60,7 +61,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   // 新しい発言が増えたら、その発言が見えるところまで送る（S-08 5章）
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ block: "end" });
-  }, [turns]);
+  }, [turns, waiting]);
 
   // 再読み込み・タブを閉じる操作には確認を出す（共通仕様 7.3）
   useEffect(() => {
@@ -70,40 +71,53 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [answeredTurns]);
 
-  /** 評価を実行して S-14 へ移る。待ち合わせは S-14 が行う（S-08 7章） */
-  function goToEvaluation() {
-    router.push(`/evaluations/${MOCK_PENDING_EVALUATION_ID}`);
-  }
+  /**
+   * 評価を実行して S-14 へ移る。待ち合わせは S-14 が行う（S-08 7章）。
+   * `from=interview` は、失敗したときに「評価をやり直す」を出せる場合の目印
+   */
+  const goToEvaluation = useCallback(() => {
+    router.push(`/evaluations/${MOCK_PENDING_EVALUATION_ID}?from=interview`);
+  }, [router]);
 
-  function handleSubmit(
-    content: string,
-    detail?: { audioSeconds: number; fillerCount: number },
-  ) {
-    const answer: ChatTurn = {
-      role: "user",
-      content,
-      time: nowClock(),
-      audio_seconds: detail?.audioSeconds,
-      filler_count: detail?.fillerCount ?? countFillers(content),
-    };
-    const answered = answeredTurns + 1;
-
-    // 上限に達したら確認を出さずに評価へ進む（S-08 4章 / 9章）
-    if (answered >= maxTurns) {
+  const handleSubmit = useCallback(
+    (
+      content: string,
+      detail?: { audioSeconds: number; fillerCount: number },
+    ) => {
+      const answer: ChatTurn = {
+        role: "user",
+        content,
+        time: nowClock(),
+        audio_seconds: detail?.audioSeconds,
+        filler_count: detail?.fillerCount ?? countFillers(content),
+      };
       setTurns((current) => [...current, answer]);
-      goToEvaluation();
-      return;
-    }
 
-    // モックでは POST /interviews/chat を呼ばず、見本の質問を順に出す
-    const nextQuestion =
-      MOCK_NEXT_QUESTIONS[(answered - 1) % MOCK_NEXT_QUESTIONS.length];
-    setTurns((current) => [
-      ...current,
-      answer,
-      { role: "assistant", content: nextQuestion, time: nowClock() },
-    ]);
-  }
+      // 上限に達したら確認を出さずに評価へ進む（S-08 4章 / 9章）
+      if (answeredTurns + 1 >= maxTurns) {
+        goToEvaluation();
+        return;
+      }
+      setWaiting(true);
+    },
+    [answeredTurns, maxTurns, goToEvaluation],
+  );
+
+  // 面接官の応答待ち。モックでは POST /interviews/chat を呼ばず、見本の質問を順に出す
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => {
+      const nextQuestion =
+        MOCK_NEXT_QUESTIONS[(answeredTurns - 1) % MOCK_NEXT_QUESTIONS.length];
+      setTurns((current) => [
+        ...current,
+        { role: "assistant", content: nextQuestion, time: nowClock() },
+      ]);
+      setWaiting(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [waiting, answeredTurns]);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -178,6 +192,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           {turns.map((turn, index) => (
             <ChatMessage key={index} turn={turn} />
           ))}
+          {waiting && <ThinkingMessage />}
           <div ref={logEndRef} />
         </div>
       </div>
@@ -188,6 +203,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
             answerMethod={answerMethod}
             onChangeAnswerMethod={setAnswerMethod}
             onSubmit={handleSubmit}
+            waiting={waiting}
           />
           <p className="text-note text-ink-muted">
             この画面を離れると会話は失われます。評価は「面接を終える」を押したあとに行われます。
