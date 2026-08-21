@@ -53,3 +53,38 @@ def generate_reply(system: str, history: list[dict]) -> str:
     # 履歴は面接官(assistant)の質問から始まるため、キックオフ用の user メッセージを常に先頭に置く。
     kickoff = {"role": "user", "content": "面接を開始してください。最初の質問をお願いします。"}
     return _call_bedrock(system, [kickoff, *history], max_tokens=300, timeout=30.0)
+
+
+def evaluate_interview(company_name: str | None, turns: list[dict]) -> dict:
+    """会話履歴から定性評価（構成・内容）を生成して dict で返す。
+
+    LLM に渡すのは turns だけ（定量スコアは渡さない＝定量はコード、定性はLLM / ADR-0009）。
+    返す形: {"score": int, "comment": str, "advice": [str, ...]}
+    """
+    import json
+
+    target = f"応募先は「{company_name}」です。" if company_name else "チュートリアル（一般的な面接練習）です。"
+    system = (
+        f"あなたは採用面接の評価者です。{target}\n"
+        "面接の会話履歴を読み、応募者の回答を「構成・内容」の観点で評価してください。\n"
+        "%で囲まれた語（例: %えー%）は文字起こしが検出したフィラー（言い淀み）です。\n"
+        "次のJSONだけを返してください（前置き・解説・コードブロック記法は禁止）:\n"
+        '{"score": 0-100の整数, "comment": "評価コメント1〜2文", "advice": ["改善アドバイス", ...]}'
+    )
+    transcript = "\n".join(
+        f"{'面接官' if t['role'] == 'assistant' else '応募者'}: {t['content']}" for t in turns
+    )
+
+    # バックグラウンド実行なのでチャットよりタイムアウトに余裕を持たせる（ユーザーを待たせない）
+    text = _call_bedrock(
+        system, [{"role": "user", "content": transcript or "（会話なし）"}], max_tokens=1000, timeout=60.0
+    )
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"LLM の評価結果を JSON として読めませんでした: {text[:200]}") from e
+
+    # json.loads は配列や数値でも通るため、dict であることだけ確認する
+    if not isinstance(result, dict):
+        raise RuntimeError(f"LLM の評価結果が想定した形ではありません: {text[:200]}")
+    return result

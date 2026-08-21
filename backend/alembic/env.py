@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import text
 
 from alembic import context
 
@@ -70,6 +71,8 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        connection.execute(text("SELECT pg_advisory_lock(20260820)"))
+
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
