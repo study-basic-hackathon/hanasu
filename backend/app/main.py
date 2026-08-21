@@ -21,3 +21,7 @@ app.include_router(evaluations.router)
 @app.get("/")
 def root():
     return {"message": "hello hanasu"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
