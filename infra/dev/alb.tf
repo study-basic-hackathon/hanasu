@@ -34,7 +34,33 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden"
+      status_code  = "403"
+    }
+  }
+
+  # CloudFront distribution のデプロイ完了後に直接アクセスを遮断する。
+  depends_on = [aws_cloudfront_distribution.api]
+}
+
+# CloudFront が付与する秘密 header を持つリクエストだけを API へ転送する。
+resource "aws_lb_listener_rule" "cloudfront_origin" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  condition {
+    http_header {
+      http_header_name = local.cloudfront_origin_header_name
+      values           = [random_password.cloudfront_origin_header.result]
+    }
   }
 }

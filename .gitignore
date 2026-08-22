@@ -1,0 +1,10 @@
+# 環境変数・シークレット（OPENAI_API_KEY 等はここに置く）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+
+# OS
+.DS_Store

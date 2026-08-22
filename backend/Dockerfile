@@ -16,4 +16,5 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 起動時にマイグレーションを適用してからAPIを立ち上げる（本番=ECSでも同じ流れ）
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

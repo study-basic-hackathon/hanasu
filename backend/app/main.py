@@ -2,21 +2,26 @@ import os
 
 from fastapi import FastAPI
 
-from app import models
-from app.database import Base, engine
-from app.routers import auth
-from app.seed import seed_user
+from app.routers import auth , companies , evaluations , interviews
+from app.seed import seed_evaluations, seed_user
 
-Base.metadata.create_all(bind=engine)
 
-# 開発用のテストユーザー投入
+# 開発用のテストユーザー・評価履歴サンプルの投入
 if os.getenv("SEED_DEV_USER", "").lower() == "true":
     seed_user()
+    seed_evaluations()
 
 app = FastAPI(title="hanasu API")
 
 app.include_router(auth.router)
+app.include_router(companies.router)
+app.include_router(interviews.router)
+app.include_router(evaluations.router)
 
 @app.get("/")
 def root():
     return {"message": "hello hanasu"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

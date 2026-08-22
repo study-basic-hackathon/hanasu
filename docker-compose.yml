@@ -12,10 +12,15 @@ services:
       JWT_SECRET_KEY: dev-secret-change-me
       # 開発用テストユーザーのseedを有効化
       SEED_DEV_USER: "true"
+      # LLM（Bedrock）設定。ローカルはルートの .env からAWSキーを渡す。ECS上はタスクロールで自動
+      AWS_REGION: ${AWS_REGION:-ap-northeast-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
     depends_on:
       db:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   db:
     image: postgres:16-alpine

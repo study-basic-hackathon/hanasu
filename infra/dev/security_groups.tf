@@ -1,13 +1,13 @@
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb"
-  description = "ALB: allow HTTP from the internet"
+  description = "ALB: allow HTTP only from CloudFront"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id]
   }
 
   egress {

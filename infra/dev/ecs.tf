@@ -31,6 +31,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "DB_HOST", value = aws_db_instance.main.address },
         { name = "DB_PORT", value = tostring(local.db_port) },
         { name = "DB_NAME", value = var.db_name },
+        { name = "CORS_ALLOWED_ORIGINS", value = local.amplify_branch_url },
       ]
       secrets = [
         { name = "DB_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },
@@ -67,5 +68,5 @@ resource "aws_ecs_service" "api" {
     container_port   = local.container_port
   }
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener_rule.cloudfront_origin]
 }

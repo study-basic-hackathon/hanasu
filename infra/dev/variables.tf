@@ -52,3 +52,13 @@ variable "bedrock_model_id" {
   type        = string
   description = "会話・評価のLLMに使うBedrockの推論プロファイルID(on-demand非対応モデルのため直接のfoundation-model IDではなく推論プロファイルIDを指定する)"
 }
+
+variable "amplify_branch_name" {
+  type        = string
+  description = "GitHub Actionsで静的成果物を直接配備するAmplify branch名"
+}
+
+variable "github_repository" {
+  type        = string
+  description = "Amplify配備を許可するGitHubリポジトリ(owner/repository)"
+}

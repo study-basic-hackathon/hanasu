@@ -11,3 +11,6 @@ db_name              = "hanasu"
 db_username          = "hanasu_admin"
 
 bedrock_model_id = "jp.anthropic.claude-sonnet-4-6"
+
+amplify_branch_name = "main"
+github_repository   = "study-basic-hackathon/hanasu"
