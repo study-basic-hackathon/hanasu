@@ -34,3 +34,35 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   role   = aws_iam_role.ecs_task_execution.id
   policy = data.aws_iam_policy_document.ecs_task_execution_secrets.json
 }
+
+# アプリ(コンテナ内プロセス)がBedrock等のAWS APIを呼ぶためのロール。ECR pull用の実行ロールとは権限の対象が異なるため分離する
+resource "aws_iam_role" "ecs_task" {
+  name               = "${local.name_prefix}-ecs-task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume.json
+}
+
+# クロスリージョン推論プロファイルの呼び出しは、プロファイル自体に加え、
+# ルーティング先になる各リージョンのfoundation-modelへの許可も必要になる
+data "aws_bedrock_inference_profile" "bedrock" {
+  inference_profile_id = var.bedrock_model_id
+}
+
+data "aws_iam_policy_document" "ecs_task_bedrock" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+    ]
+    resources = concat(
+      [data.aws_bedrock_inference_profile.bedrock.inference_profile_arn],
+      [for m in data.aws_bedrock_inference_profile.bedrock.models : m.model_arn],
+    )
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  name   = "${local.name_prefix}-ecs-task-bedrock"
+  role   = aws_iam_role.ecs_task.id
+  policy = data.aws_iam_policy_document.ecs_task_bedrock.json
+}

@@ -47,3 +47,8 @@ variable "db_username" {
   type        = string
   description = "RDSマスターユーザー名"
 }
+
+variable "bedrock_model_id" {
+  type        = string
+  description = "会話・評価のLLMに使うBedrockの推論プロファイルID(on-demand非対応モデルのため直接のfoundation-model IDではなく推論プロファイルIDを指定する)"
+}

@@ -4,13 +4,13 @@ FastAPIサンプルアプリをECS Fargate上で動かすためのdev環境の�
 
 ## 前提条件
 
-| 項目 | 値 |
-|---|---|
-| AWS認証 | プロファイル `hanasu`(`AWS_PROFILE=hanasu`) |
-| Terraformバージョン | `= 1.15.8`(`versions.tf`で固定) |
-| state保存先 | S3バケット `hanasu-terraform-state-926046660554`(`infra/bootstrap`で事前作成) |
-| AWSアカウントID | `926046660554` |
-| リージョン | `ap-northeast-1` |
+| 項目                | 値                                                                            |
+| ------------------- | ----------------------------------------------------------------------------- |
+| AWS認証             | プロファイル `hanasu`(`AWS_PROFILE=hanasu`)                                   |
+| Terraformバージョン | `= 1.15.8`(`versions.tf`で固定)                                               |
+| state保存先         | S3バケット `hanasu-terraform-state-926046660554`(`infra/bootstrap`で事前作成) |
+| AWSアカウントID     | `926046660554`                                                                |
+| リージョン          | `ap-northeast-1`                                                              |
 
 以降のコマンドはすべて `infra/dev` ディレクトリで実行します。
 
@@ -70,6 +70,7 @@ aws ecs update-service \
 terraform output alb_dns_name
 curl http://$(terraform output -raw alb_dns_name)/
 curl http://$(terraform output -raw alb_dns_name)/items
+curl http://$(terraform output -raw alb_dns_name)/bedrock/test
 ```
 
 ECSタスクの状態確認:
