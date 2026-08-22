@@ -17,8 +17,8 @@ def _build_system_prompt(company: models.Company) -> str:
     parts = [
         "あなたは採用面接の面接官です。以下の応募情報を踏まえ、応募者への次の質問を1つだけ、日本語で簡潔に返してください。",
         "質問文のみを返し、前置きや解説は書かないでください。",
-        f"# 応募先企業: {company.name}",
-        f"# 応募者の志望動機: {company.application_reason or '（未登録）'}",
+        f"# 応募先企業: {company.company_name}",
+        f"# 応募者の志望動機: {company.motivation or '（未登録）'}",
         f"# 応募者の経歴: {company.resume or '（未登録）'}",
         f"# 企業URL: {company.company_url or '（未登録）'}",
         f"# 備考: {company.note or '（未登録）'}",

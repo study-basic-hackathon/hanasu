@@ -7,9 +7,9 @@ from pydantic import BaseModel, ConfigDict, HttpUrl, StringConstraints
 NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 class CompanyCreate(BaseModel):
-    name: NonEmptyStr
+    company_name: NonEmptyStr
     # 志望動機（必須・文字列で渡す）
-    application_reason: NonEmptyStr
+    motivation: NonEmptyStr
     # 経歴（任意・応募者自身の情報）
     resume: str | None = None
     # 企業URL（任意・http(s) の正しいURLのみ受け付ける）
@@ -20,8 +20,8 @@ class CompanyCreate(BaseModel):
 class CompanyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    name: str
-    application_reason: str | None = None
+    company_name: str
+    motivation: str | None = None
     resume: str | None = None
     company_url: str | None = None
     note: str | None = None

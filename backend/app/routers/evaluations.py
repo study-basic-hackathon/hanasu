@@ -61,7 +61,7 @@ def create_evaluation(
         company = db.get(models.Company, eval_in.company_id)
         if company is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="企業情報が見つかりません")
-        company_name = company.name 
+        company_name = company.company_name
 
     evaluation = models.Evaluation(
         company_id=eval_in.company_id,
