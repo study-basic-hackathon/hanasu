@@ -47,3 +47,8 @@ variable "db_username" {
   type        = string
   description = "RDSマスターユーザー名"
 }
+
+variable "amplify_branch_name" {
+  type        = string
+  description = "手動ZIP配備用のAmplify branch名"
+}

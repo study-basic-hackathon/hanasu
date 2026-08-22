@@ -9,3 +9,5 @@ db_instance_class    = "db.t4g.micro"
 db_allocated_storage = 20
 db_name              = "hanasu"
 db_username          = "hanasu_admin"
+
+amplify_branch_name = "main"

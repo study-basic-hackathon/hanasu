@@ -1,6 +1,31 @@
 output "alb_dns_name" {
-  description = "ALBのデフォルトドメイン(このURLでアクセス可能)"
+  description = "ALBのデフォルトドメイン(CloudFront経由のリクエストだけを受け付ける)"
   value       = aws_lb.main.dns_name
+}
+
+output "amplify_app_id" {
+  description = "手動ZIP配備に使用するAmplify App ID"
+  value       = aws_amplify_app.frontend.id
+}
+
+output "amplify_app_url" {
+  description = "Amplify AppのデフォルトドメインURL"
+  value       = "https://${aws_amplify_app.frontend.default_domain}"
+}
+
+output "amplify_branch_url" {
+  description = "手動ZIP配備後にフロントエンドを公開するAmplify branch URL"
+  value       = local.amplify_branch_url
+}
+
+output "api_cloudfront_domain_name" {
+  description = "フロントエンドに設定するAPI用CloudFrontのHTTPSドメイン名"
+  value       = aws_cloudfront_distribution.api.domain_name
+}
+
+output "api_cloudfront_url" {
+  description = "フロントエンドに設定するAPI用CloudFrontのHTTPS URL"
+  value       = "https://${aws_cloudfront_distribution.api.domain_name}"
 }
 
 output "ecr_repository_url" {
