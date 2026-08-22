@@ -1,0 +1,210 @@
+name: Deploy frontend to Amplify Hosting
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-frontend-to-amplify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+      AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
+      AMPLIFY_BRANCH_NAME: ${{ vars.AMPLIFY_BRANCH_NAME }}
+      NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate deployment settings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_variables=(
+            AWS_REGION
+            AWS_ROLE_TO_ASSUME
+            AMPLIFY_APP_ID
+            AMPLIFY_BRANCH_NAME
+            NEXT_PUBLIC_API_BASE_URL
+          )
+          for variable_name in "${required_variables[@]}"; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              echo "::error::Repository variable ${variable_name} is not set."
+              exit 1
+            fi
+          done
+
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "::error::This workflow can deploy only refs/heads/main."
+            exit 1
+          fi
+          if [[ "${AMPLIFY_BRANCH_NAME}" != "${GITHUB_REF_NAME}" ]]; then
+            echo "::error::AMPLIFY_BRANCH_NAME must match ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if [[ ! "${AMPLIFY_APP_ID}" =~ ^d[a-z0-9]+$ ]]; then
+            echo "::error::AMPLIFY_APP_ID has an invalid format."
+            exit 1
+          fi
+          if [[ ! "${NEXT_PUBLIC_API_BASE_URL}" =~ ^https://[^[:space:]]+$ ]]; then
+            echo "::error::NEXT_PUBLIC_API_BASE_URL must be an HTTPS URL."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify Node.js version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_major="$(node -p "require('./frontend/package.json').engines.node.match(/[0-9]+/)[0]")"
+          actual_major="$(node -p "process.versions.node.split('.')[0]")"
+          echo "Configured Node.js: $(node --version) (engines.node: $(node -p "require('./frontend/package.json').engines.node"))"
+          if [[ "${actual_major}" != "${expected_major}" ]]; then
+            echo "::error::Node.js major version does not match frontend/package.json."
+            exit 1
+          fi
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build static frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Create deployment archive
+        id: archive
+        working-directory: frontend/out
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          archive_path="${RUNNER_TEMP}/frontend.zip"
+          zip -q -r "${archive_path}" .
+
+          archive_entries="$(unzip -Z1 "${archive_path}")"
+          if ! grep -qx "index.html" <<<"${archive_entries}"; then
+            echo "::error::The deployment archive does not contain index.html at its root."
+            exit 1
+          fi
+          if grep -Eq "^(out|frontend)/" <<<"${archive_entries}"; then
+            echo "::error::The deployment archive contains an unexpected top-level directory."
+            exit 1
+          fi
+
+          echo "Archive contents:"
+          sort <<<"${archive_entries}"
+          echo "archive_path=${archive_path}" >>"${GITHUB_OUTPUT}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy archive to Amplify Hosting
+        id: deploy
+        shell: bash
+        env:
+          ARCHIVE_PATH: ${{ steps.archive.outputs.archive_path }}
+        run: |
+          set -euo pipefail
+
+          resolved_branch="$(aws amplify get-branch \
+            --app-id "${AMPLIFY_APP_ID}" \
+            --branch-name "${AMPLIFY_BRANCH_NAME}" \
+            --query 'branch.branchName' \
+            --output text)"
+          if [[ "${resolved_branch}" != "${AMPLIFY_BRANCH_NAME}" ]]; then
+            echo "::error::Amplify branch could not be verified."
+            exit 1
+          fi
+
+          deployment="$(aws amplify create-deployment \
+            --app-id "${AMPLIFY_APP_ID}" \
+            --branch-name "${AMPLIFY_BRANCH_NAME}" \
+            --output json)"
+          job_id="$(jq -er '.jobId' <<<"${deployment}")"
+          zip_upload_url="$(jq -er '.zipUploadUrl' <<<"${deployment}")"
+          echo "::add-mask::${zip_upload_url}"
+
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --request PUT \
+            --upload-file "${ARCHIVE_PATH}" \
+            "${zip_upload_url}"
+
+          aws amplify start-deployment \
+            --app-id "${AMPLIFY_APP_ID}" \
+            --branch-name "${AMPLIFY_BRANCH_NAME}" \
+            --job-id "${job_id}" \
+            --no-cli-pager >/dev/null
+
+          echo "job_id=${job_id}" >>"${GITHUB_OUTPUT}"
+          echo "Amplify deployment job ${job_id} started."
+
+      - name: Wait for Amplify deployment
+        shell: bash
+        env:
+          JOB_ID: ${{ steps.deploy.outputs.job_id }}
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..90}; do
+            status="$(aws amplify get-job \
+              --app-id "${AMPLIFY_APP_ID}" \
+              --branch-name "${AMPLIFY_BRANCH_NAME}" \
+              --job-id "${JOB_ID}" \
+              --query 'job.summary.status' \
+              --output text)"
+            echo "Amplify deployment job ${JOB_ID}: ${status} (${attempt}/90)"
+
+            case "${status}" in
+              SUCCEED)
+                public_url="https://${AMPLIFY_BRANCH_NAME}.${AMPLIFY_APP_ID}.amplifyapp.com"
+                echo "Deployment succeeded: ${public_url}"
+                {
+                  echo "### Amplify deployment"
+                  echo "- Job ID: \`${JOB_ID}\`"
+                  echo "- Status: \`${status}\`"
+                  echo "- URL: ${public_url}"
+                } >>"${GITHUB_STEP_SUMMARY}"
+                exit 0
+                ;;
+              FAILED | CANCELLED)
+                echo "::error::Amplify deployment job ${JOB_ID} finished with ${status}."
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          echo "::error::Timed out waiting for Amplify deployment job ${JOB_ID}."
+          exit 1

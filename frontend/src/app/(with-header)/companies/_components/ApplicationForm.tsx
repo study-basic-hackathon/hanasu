@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -10,12 +10,19 @@ import { Card } from "@/components/ui/Card";
 import { TextArea, TextField } from "@/components/ui/TextField";
 import type { Application } from "@/mocks/types";
 
+import { resolveReturnTo } from "./returnTo";
+
 type ApplicationFormProps = {
   /** 編集のときだけ渡す。無ければ新規登録 */
   application?: Application;
   /** 呼び出し元（S-05 または S-06）へ戻るためのパス */
   returnTo: string;
 };
+
+type ReturnAwareApplicationFormProps = Pick<
+  ApplicationFormProps,
+  "application"
+>;
 
 type FormValues = {
   company_name: string;
@@ -57,6 +64,22 @@ function toFormValues(application?: Application): FormValues {
     resume: application?.resume ?? "",
     note: application?.note ?? "",
   };
+}
+
+/**
+ * 静的出力後も `?from=` をブラウザで解決し、呼び出し元への戻り先を維持する。
+ */
+export function ReturnAwareApplicationForm({
+  application,
+}: ReturnAwareApplicationFormProps) {
+  const searchParams = useSearchParams();
+
+  return (
+    <ApplicationForm
+      application={application}
+      returnTo={resolveReturnTo(searchParams.get("from") ?? undefined)}
+    />
+  );
 }
 
 type Errors = Partial<Record<keyof FormValues, string>>;

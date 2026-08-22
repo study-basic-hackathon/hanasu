@@ -1,16 +1,24 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { MOCK_APPLICATIONS } from "@/mocks/applications";
 
-import { ApplicationForm } from "../../_components/ApplicationForm";
-import { resolveReturnTo } from "../../_components/returnTo";
+import {
+  ApplicationForm,
+  ReturnAwareApplicationForm,
+} from "../../_components/ApplicationForm";
+
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return MOCK_APPLICATIONS.map(({ id }) => ({ id: String(id) }));
+}
 
 /** S-07 応募企業情報 編集 */
 export default async function EditCompanyPage(
   props: PageProps<"/companies/[id]/edit">,
 ) {
   const { id } = await props.params;
-  const { from } = await props.searchParams;
   const application = MOCK_APPLICATIONS.find(
     (candidate) => String(candidate.id) === id,
   );
@@ -18,9 +26,12 @@ export default async function EditCompanyPage(
   if (!application) notFound();
 
   return (
-    <ApplicationForm
-      application={application}
-      returnTo={resolveReturnTo(from)}
-    />
+    <Suspense
+      fallback={
+        <ApplicationForm application={application} returnTo="/companies" />
+      }
+    >
+      <ReturnAwareApplicationForm application={application} />
+    </Suspense>
   );
 }

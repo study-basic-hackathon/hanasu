@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -23,6 +24,20 @@ type EvaluationViewProps = {
   /** S-08 から続けて開いたか。失敗したときの導線が変わる（S-14 5章） */
   fromInterview: boolean;
 };
+
+/** 静的出力後も `?from=interview` をブラウザで判定する。 */
+export function ReturnAwareEvaluationView({
+  evaluation,
+}: Pick<EvaluationViewProps, "evaluation">) {
+  const searchParams = useSearchParams();
+
+  return (
+    <EvaluationView
+      evaluation={evaluation}
+      fromInterview={searchParams.get("from") === "interview"}
+    />
+  );
+}
 
 /** 合否の目安（S-14 4.2）。しきい値はスコアの色分けと同じ */
 function passLabel(totalScore: number): string {
