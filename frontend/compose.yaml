@@ -10,6 +10,33 @@ services:
       # bind mount だけだとホスト側の内容で上書きされてしまうため、名前付きボリュームで隠す
       - node_modules:/app/node_modules
       - next_cache:/app/.next
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://localhost:3000').then((response) =>
+          process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.62.1-noble
+    init: true
+    ipc: host
+    working_dir: /app
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      PLAYWRIGHT_TEST_BASE_URL: http://web:3000
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "9323:9323"
+    command: npm run test:e2e
 
 volumes:
   node_modules:

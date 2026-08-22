@@ -57,7 +57,27 @@ docker compose run --rm web npm run test:run
 docker compose run --rm web npm run test:coverage
 ```
 
-`test:coverage` はターミナルに要約を表示し、HTML レポートを `coverage/` に出力します。初回導入ではカバレッジの閾値を設けません。Playwright による E2E テストは別途導入します。
+`test:coverage` はターミナルに要約を表示し、HTML レポートを `coverage/` に出力します。初回導入ではカバレッジの閾値を設けません。
+
+#### Playwright E2E
+
+Playwright の初期スモークテストは Chromium で実行し、async Server Component の動的ページ表示と主要ページの画面遷移を確認します。実バックエンドを使った認証 E2E は対象外です。
+
+ローカルでは、既存の `web` サービスを起動してから専用の `e2e` サービスを実行します。`@playwright/test` とブラウザを含む Docker イメージは `1.62.1` に揃えています。
+
+```bash
+docker compose up -d --build web
+docker compose run --rm e2e npm run test:e2e
+```
+
+テスト後は HTML レポートが `playwright-report/` に出力されます。失敗したテストのスクリーンショットは `test-results/` 以下に出力されます。HTML レポートをローカルで配信する場合は、次のコマンドを実行して [http://localhost:9323](http://localhost:9323) を開きます。
+
+```bash
+docker compose run --rm --service-ports e2e \
+  npx playwright show-report --host 0.0.0.0
+```
+
+GitHub Actions の `Frontend E2E` workflow は、静的出力 `out/` を固定バージョンの `serve` で配信し、同じ `npm run test:e2e` を実行します。E2E が失敗したときだけ、HTML レポートとスクリーンショットを `playwright-failure-<run id>-<attempt>` artifact として7日間保存します。
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
