@@ -44,7 +44,7 @@ docker compose run --rm web npm run build
 正本は `documents/技術スタック.md`。以下はその要約:
 
 - **バックエンド**: Python / FastAPI(`backend/` に配置、デプロイ先は AWS ECS(Fargate))
-- **フロントエンド**: TypeScript / Next.js(`frontend/` に配置、デプロイ先は **AWS Amplify Hosting**。ADR-0012 で Vercel から変更。Amplify の実構築は未着手)
+- **フロントエンド**: TypeScript / Next.js(`frontend/` に配置、デプロイ先は **AWS Amplify Hosting**。ADR-0012 で Vercel から変更。GitHub Actions が静的成果物をビルドし、Git 非接続 App へ直接配備する — ADR-0017)
 - **インフラ**: AWS(`infra/` に配置)— VPC、ALB、ECR、ECS、RDS(**応募情報・評価結果**。ADR-0009)、CloudWatch Logs、Bedrock(会話の質問生成と評価の定性項目。ADR-0010)、S3(Terraform の state 管理用)、Amplify Hosting(フロントエンド)。IaC は Terraform、CI/CD は GitHub Actions
 - **音声認識**: **AmiVoice**(ADR-0010)。`keepFillerToken=1` を付けてフィラーを保持したまま文字起こしする**商用の外部 API**
 - 使わない想定:
@@ -60,7 +60,7 @@ API の一覧と入出力仕様は `documents/backend/API仕様.md` が正本(�
 ## リポジトリ構成
 
 - `backend/` — Python / FastAPI バックエンド。アプリコードは `app/` 配下(`routers/` `models/` `schemas/`)。**認証 API(`POST /token` / `GET /users/me`)まで実装済み。** DB は PostgreSQL(SQLAlchemy + psycopg)、Python は 3.14、依存は `pyproject.toml` / `uv.lock`(uv)で管理。リポジトリ直下の `docker-compose.yml` が API と DB をまとめて起動する
-- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(ローカルは `package.json` の `engines.node` とイメージタグで固定。Amplify 側の指定は構築時に決める — ADR-0012)。**UI は Tailwind CSS のみで実装する(コンポーネント集を足さない)。デザイントークンは `globals.css` の `@theme` に持つ — ADR-0014。** 構成の根拠は ADR-0002〜0006 と ADR-0012
+- `frontend/` — Next.js フロントエンド。**Next.js 16.3 / TypeScript / App Router / ESLint / Tailwind CSS v4 / npm。** アプリコードは `src/` 配下、import alias は `@/*` → `./src/*`。Node は 24.x(`package.json` の `engines.node` を GitHub Actions が読み、Dockerfile のメジャーバージョンも揃える — ADR-0018)。本番ビルドは `output: "export"` で `out/` を生成し、`.github/workflows/deploy-frontend-to-amplify.yml` が Amplify Hosting へ直接配備する。**UI は Tailwind CSS のみで実装する(コンポーネント集を足さない)。デザイントークンは `globals.css` の `@theme` に持つ — ADR-0014。** 構成の根拠は ADR-0003〜0006、ADR-0012、ADR-0017、ADR-0018
 - `infra/` — AWS インフラコード(Terraform)。`bootstrap/`(state 用 S3 バケット)と `dev/`(VPC / ALB / ECR / ECS Fargate)。**RDS・Bedrock はまだ定義していない。** 構築から破棄までの手順は `infra/dev/README.md`
 - `documents/` — 設計ドキュメント(日本語)。`ADR/`(確定した意思決定)、`00_検討/`(検討記録)、`task-memo/`、`template/`、`backend/`、`frontend/01_design/` のサブディレクトリあり。**書き方のルールは `documents/README.md`**
 

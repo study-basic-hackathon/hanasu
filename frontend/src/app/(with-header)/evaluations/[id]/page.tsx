@@ -1,8 +1,20 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { MOCK_EVALUATIONS } from "@/mocks/evaluations";
 
-import { EvaluationView } from "./_components/EvaluationView";
+import {
+  EvaluationView,
+  ReturnAwareEvaluationView,
+} from "./_components/EvaluationView";
+
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return MOCK_EVALUATIONS.map(({ evaluation_id }) => ({
+    id: String(evaluation_id),
+  }));
+}
 
 /**
  * S-14 評価 - 合否判定。
@@ -13,7 +25,6 @@ export default async function EvaluationPage(
   props: PageProps<"/evaluations/[id]">,
 ) {
   const { id } = await props.params;
-  const { from } = await props.searchParams;
   const evaluation = MOCK_EVALUATIONS.find(
     (candidate) => String(candidate.evaluation_id) === id,
   );
@@ -21,9 +32,12 @@ export default async function EvaluationPage(
   if (!evaluation) notFound();
 
   return (
-    <EvaluationView
-      evaluation={evaluation}
-      fromInterview={from === "interview"}
-    />
+    <Suspense
+      fallback={
+        <EvaluationView evaluation={evaluation} fromInterview={false} />
+      }
+    >
+      <ReturnAwareEvaluationView evaluation={evaluation} />
+    </Suspense>
   );
 }

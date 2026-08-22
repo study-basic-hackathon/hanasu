@@ -1,4 +1,4 @@
-# 開発専用イメージ。本番のビルド・実行は Vercel 側で行う（ADR-0001）
+# 開発専用イメージ。本番はGitHub Actionsでビルドし、Amplify Hostingへ配備する（ADR-0017）
 # ベースイメージの選定根拠は documents/ADR/0006-開発用Dockerベースイメージ.md
 FROM node:24-bookworm-slim
 

@@ -27,15 +27,7 @@ cp .env.example .env.local
 
 既定の例は `http://localhost:8000` です。値の前後の空白と末尾の `/` は共通設定で除去されます。未設定または空文字のまま共通設定を参照すると、設定漏れを示すエラーになります。`NEXT_PUBLIC_*` の値はブラウザへ公開されるため、認証情報や秘密情報は設定しないでください。
 
-Amplify へ配備する GitHub Actions では、CloudFront の HTTPS URL を GitHub Actions の Repository variable `NEXT_PUBLIC_API_BASE_URL` に登録し、`npm run build` を実行する step へ同名の環境変数として渡します。Amplify の環境変数は使用しません。
-
-```yaml
-- name: Build frontend
-  working-directory: frontend
-  env:
-    NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
-  run: npm run build
-```
+Amplify へ配備する GitHub Actions では、CloudFront の HTTPS URL を Repository variable `NEXT_PUBLIC_API_BASE_URL` からビルド時に渡します。Amplify の環境変数は使用しません。
 
 ### Dev Container で開発する
 
@@ -78,8 +70,26 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Amplify Hosting へ配備する
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`next.config.ts` の静的出力により、`npm run build` は `out/` を生成します。`.github/workflows/deploy-frontend-to-amplify.yml` は `main` への push と `workflow_dispatch` で起動し、次の処理だけを行います。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. `frontend/package.json` の `engines.node` から Node.js 24.x を設定する
+2. `NEXT_PUBLIC_API_BASE_URL` を渡して依存関係をインストールし、静的成果物をビルドする
+3. `out/` の中身をルートとする ZIP を作成する
+4. GitHub OIDC で配備専用 AWS IAM ロールを引き受ける
+5. Amplify の `CreateDeployment`、署名付き URL への ZIP upload、`StartDeployment` を実行し、`GetJob` で完了まで確認する
+
+Terraform の `plan` / `apply` / `destroy` はこの workflow では実行しません。Amplify App や配備専用ロールなどのインフラは `infra/dev/` を手動で apply して用意します。
+
+Terraform apply 後、Repository Variables に以下を設定してください。取得元の詳細は `infra/dev/README.md` を参照してください。
+
+| Variable | 用途 |
+|---|---|
+| `AWS_REGION` | Amplify App を作成した AWS リージョン |
+| `AWS_ROLE_TO_ASSUME` | GitHub OIDC で引き受ける Amplify 配備専用ロール ARN |
+| `AMPLIFY_APP_ID` | 配備先の Amplify App ID |
+| `AMPLIFY_BRANCH_NAME` | 配備先 branch。現在は `main` |
+| `NEXT_PUBLIC_API_BASE_URL` | API 用 CloudFront の HTTPS URL |
+
+長期 AWS アクセスキーは GitHub Secrets へ保存しません。`workflow_dispatch` を使う場合も、OIDC ロールの信頼条件に合わせて `main` を選択してください。
