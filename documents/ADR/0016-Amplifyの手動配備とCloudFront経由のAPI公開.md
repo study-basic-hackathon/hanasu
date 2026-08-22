@@ -1,6 +1,6 @@
 # ADR-0016: Amplify の手動配備と CloudFront 経由でフロントエンドと API を公開する
 
-- ステータス: 決定
+- ステータス: ADR-0017 により置き換え
 - 日付: 2026-08-22
 - 依存: [ADR-0012](0012-フロントエンドデプロイ先.md)（フロントエンドのデプロイ先は Amplify Hosting）
 - 被依存: [#19](https://github.com/study-basic-hackathon/hanasu/issues/19)、[#89](https://github.com/study-basic-hackathon/hanasu/issues/89)、[#90](https://github.com/study-basic-hackathon/hanasu/issues/90)、[#92](https://github.com/study-basic-hackathon/hanasu/issues/92)
