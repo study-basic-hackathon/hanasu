@@ -64,7 +64,7 @@ docker tag hanasu-api:latest "$ECR_REPO:latest"
 docker push "$ECR_REPO:latest"
 ```
 
-`backend/`はコンテナ起動時に`alembic upgrade head`→`uvicorn`起動の順に実行する。DB接続情報は`DATABASE_URL`(Secrets Manager経由)で渡している。動作確認は`curl https://<api_cloudfront_url>/health`で行う。
+`backend/`はコンテナ起動時に`alembic upgrade head`→`uvicorn`起動の順に実行する。DB接続情報は`DATABASE_URL`(Secrets Manager経由)で渡している。動作確認は`curl $(terraform output -raw api_cloudfront_url)/health`で行う(`api_cloudfront_url`は`https://`込みの値なので先頭に重ねて付けない)。
 
 ## GitHub ActionsによるAmplify直接配備の初期設定
 
