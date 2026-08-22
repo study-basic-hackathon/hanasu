@@ -17,6 +17,26 @@ docker compose down            # 停止
 
 `node_modules` と `.next` は名前付きボリュームに分離しているため、ホスト側には作られません。依存を追加したら `docker compose up -d --build` でイメージを作り直してください。
 
+### API 接続先を設定する
+
+フロントエンドが参照するバックエンド API の接続先は、公開環境変数 `NEXT_PUBLIC_API_BASE_URL` だけで設定します。ローカル開発では `.env.example` を `.env.local` にコピーし、必要に応じて値を変更してください。
+
+```bash
+cp .env.example .env.local
+```
+
+既定の例は `http://localhost:8000` です。値の前後の空白と末尾の `/` は共通設定で除去されます。未設定または空文字のまま共通設定を参照すると、設定漏れを示すエラーになります。`NEXT_PUBLIC_*` の値はブラウザへ公開されるため、認証情報や秘密情報は設定しないでください。
+
+Amplify へ配備する GitHub Actions では、CloudFront の HTTPS URL を GitHub Actions の Repository variable `NEXT_PUBLIC_API_BASE_URL` に登録し、`npm run build` を実行する step へ同名の環境変数として渡します。Amplify の環境変数は使用しません。
+
+```yaml
+- name: Build frontend
+  working-directory: frontend
+  env:
+    NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+  run: npm run build
+```
+
 ### Dev Container で開発する
 
 VSCode でこの `frontend/` を開き、「Reopen in Container」を実行すると、上の `compose.yaml` の `web` サービスにそのまま入ります。ワークスペースは `/app` です。
