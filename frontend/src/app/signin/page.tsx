@@ -1,11 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextField } from "@/components/ui/TextField";
+import { requestAccessToken } from "@/lib/auth-api";
+import { storeAccessToken } from "@/lib/token-storage";
+
+const INVALID_CREDENTIALS_MESSAGE = "ID またはパスワードが違います。";
+const UNAVAILABLE_MESSAGE =
+  "サインインできませんでした。時間をおいてもう一度お試しください。";
 
 /**
  * S-01 サインイン。本サービスの唯一の入口で、ヘッダーを持たない。
@@ -15,16 +21,44 @@ export default function SignInPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   // ID かパスワードが空のあいだは押せない。エラー文は出さない（S-01 4章）
   const canSubmit = userId.trim() !== "" && password !== "";
 
-  // モックでは POST /token を呼ばず、そのまま S-04 へ移る。
-  // 送信中の表示と認証失敗の表示は、API 連携のときに入れる（S-01 6章）
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
-    router.push("/");
+    if (!canSubmit || submittingRef.current) return;
+
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await requestAccessToken(userId, password);
+      if (!result.ok) {
+        if (result.reason === "invalid-credentials") {
+          setPassword("");
+          setErrorMessage(INVALID_CREDENTIALS_MESSAGE);
+        } else {
+          setErrorMessage(UNAVAILABLE_MESSAGE);
+        }
+        return;
+      }
+
+      try {
+        storeAccessToken(result.accessToken);
+      } catch {
+        setErrorMessage(UNAVAILABLE_MESSAGE);
+        return;
+      }
+      router.push("/");
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -44,6 +78,7 @@ export default function SignInPage() {
               autoComplete="username"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
+              disabled={isSubmitting}
             />
             <TextField
               label="パスワード"
@@ -52,9 +87,19 @@ export default function SignInPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              disabled={isSubmitting}
             />
-            <Button type="submit" disabled={!canSubmit} className="mt-1 w-full">
-              サインイン
+            {errorMessage && (
+              <p role="alert" className="text-note text-danger">
+                {errorMessage}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={!canSubmit || isSubmitting}
+              className="mt-1 w-full"
+            >
+              {isSubmitting ? "サインインしています" : "サインイン"}
             </Button>
             <p className="border-t border-divider pt-4 text-note leading-[1.7] text-ink-muted">
               配布された ID
