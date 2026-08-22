@@ -1,24 +1,9 @@
 # backend/ 用のシークレットを組み立てる。
-
-data "aws_secretsmanager_secret_version" "rds_master" {
-  secret_id = aws_db_instance.main.master_user_secret[0].secret_arn
-}
-
-locals {
-  rds_master_credentials = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)
-
-  # backend/app/database.py が要求する1本の接続文字列。パスワードに記号が含まれる場合に備えurlencodeする。
-  backend_database_url = "postgresql+psycopg://${local.rds_master_credentials.username}:${urlencode(local.rds_master_credentials.password)}@${aws_db_instance.main.address}:${local.db_port}/${var.db_name}"
-}
-
-resource "aws_secretsmanager_secret" "backend_database_url" {
-  name = "${local.name_prefix}-backend-database-url"
-}
-
-resource "aws_secretsmanager_secret_version" "backend_database_url" {
-  secret_id     = aws_secretsmanager_secret.backend_database_url.id
-  secret_string = local.backend_database_url
-}
+#
+# RDSのマスターパスワードはTerraformで読み取って別の文字列(接続URL)に組み立てない。
+# 組み立てた値はsensitive指定してもstateには平文で残るため、ARNだけをECSに渡し、
+# 接続URLの組み立ては実行時にbackend/app/database.py側で行う(DB_HOST/DB_PORT/DB_NAME
+# は環境変数、DB_USERNAME/DB_PASSWORDはECSのsecretsでRDSマスターシークレットから直接注入)。
 
 resource "random_password" "jwt_secret_key" {
   length  = 64

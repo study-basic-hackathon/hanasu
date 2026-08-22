@@ -16,10 +16,16 @@ locals {
     { name = "CORS_ALLOWED_ORIGINS", value = local.amplify_branch_url },
     # ADR-0011: 会員登録なしの固定ユーザーをbackend起動時に投入する(testuser/testpass)
     { name = "SEED_DEV_USER", value = "true" },
+    # DATABASE_URLはTerraformで組み立てない(state対策)。backend/app/database.pyが
+    # これらとDB_USERNAME/DB_PASSWORD(secrets)から実行時に接続URLを組み立てる。
+    { name = "DB_HOST", value = aws_db_instance.main.address },
+    { name = "DB_PORT", value = tostring(local.db_port) },
+    { name = "DB_NAME", value = var.db_name },
   ]
 
   container_secrets = [
-    { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.backend_database_url.arn },
+    { name = "DB_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },
+    { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" },
     { name = "JWT_SECRET_KEY", valueFrom = aws_secretsmanager_secret.jwt_secret_key.arn },
   ]
 }

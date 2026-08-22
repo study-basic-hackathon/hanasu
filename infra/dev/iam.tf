@@ -28,7 +28,6 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_db_instance.main.master_user_secret[0].secret_arn,
-      aws_secretsmanager_secret.backend_database_url.arn,
       aws_secretsmanager_secret.jwt_secret_key.arn,
     ]
   }
