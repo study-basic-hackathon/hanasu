@@ -4,7 +4,7 @@
 - 日付: 2026-08-22
 - 置き換える ADR: [ADR-0016](0016-Amplifyの手動配備とCloudFront経由のAPI公開.md)
 - 依存: [ADR-0012](0012-フロントエンドデプロイ先.md)（フロントエンドのデプロイ先は Amplify Hosting）
-- 被依存: [#19](https://github.com/study-basic-hackathon/hanasu/issues/19)、[#89](https://github.com/study-basic-hackathon/hanasu/issues/89)、[#90](https://github.com/study-basic-hackathon/hanasu/issues/90)、[#92](https://github.com/study-basic-hackathon/hanasu/issues/92)
+- 被依存: [ADR-0018](0018-GitHubActionsのNodeバージョン.md)（GitHub Actions の Node.js バージョン固定方法）、[#19](https://github.com/study-basic-hackathon/hanasu/issues/19)、[#89](https://github.com/study-basic-hackathon/hanasu/issues/89)、[#90](https://github.com/study-basic-hackathon/hanasu/issues/90)、[#92](https://github.com/study-basic-hackathon/hanasu/issues/92)
 
 ## コンテキスト（背景と課題）
 
