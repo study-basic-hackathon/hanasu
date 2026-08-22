@@ -35,6 +35,18 @@ docker compose run --rm web npm run lint
 docker compose run --rm web npm run build
 ```
 
+### テスト
+
+UT とコンポーネントテストは Vitest、React Testing Library、jsdom で実行します。変更を監視しながら実行する場合は `npm run test`、CI と同じ一回限りの実行には `npm run test:run` を使います。
+
+```bash
+docker compose run --rm web npm run test
+docker compose run --rm web npm run test:run
+docker compose run --rm web npm run test:coverage
+```
+
+`test:coverage` はターミナルに要約を表示し、HTML レポートを `coverage/` に出力します。初回導入ではカバレッジの閾値を設けません。Playwright による E2E テストは別途導入します。
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More
