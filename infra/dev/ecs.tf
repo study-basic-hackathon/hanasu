@@ -31,8 +31,6 @@ resource "aws_ecs_task_definition" "api" {
         { name = "DB_HOST", value = aws_db_instance.main.address },
         { name = "DB_PORT", value = tostring(local.db_port) },
         { name = "DB_NAME", value = var.db_name },
-        { name = "BEDROCK_REGION", value = var.region },
-        { name = "BEDROCK_MODEL_ID", value = var.bedrock_model_id },
       ]
       secrets = [
         { name = "DB_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },

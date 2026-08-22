@@ -70,7 +70,6 @@ aws ecs update-service \
 terraform output alb_dns_name
 curl http://$(terraform output -raw alb_dns_name)/
 curl http://$(terraform output -raw alb_dns_name)/items
-curl http://$(terraform output -raw alb_dns_name)/bedrock/test
 ```
 
 ECSタスクの状態確認:
