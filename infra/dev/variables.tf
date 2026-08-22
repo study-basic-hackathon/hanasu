@@ -47,3 +47,13 @@ variable "db_username" {
   type        = string
   description = "RDSマスターユーザー名"
 }
+
+variable "amplify_branch_name" {
+  type        = string
+  description = "GitHub Actionsで静的成果物を直接配備するAmplify branch名"
+}
+
+variable "github_repository" {
+  type        = string
+  description = "Amplify配備を許可するGitHubリポジトリ(owner/repository)"
+}
