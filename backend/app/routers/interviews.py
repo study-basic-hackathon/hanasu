@@ -13,12 +13,13 @@ router = APIRouter()
 
 
 def _build_system_prompt(company: models.Company) -> str:
-    """応募情報（企業情報・志望動機）を面接官の system プロンプトに反映する。"""
+    """応募情報（企業情報・志望動機・経歴）を面接官の system プロンプトに反映する。"""
     parts = [
         "あなたは採用面接の面接官です。以下の応募情報を踏まえ、応募者への次の質問を1つだけ、日本語で簡潔に返してください。",
         "質問文のみを返し、前置きや解説は書かないでください。",
         f"# 応募先企業: {company.name}",
         f"# 応募者の志望動機: {company.application_reason or '（未登録）'}",
+        f"# 応募者の経歴: {company.resume or '（未登録）'}",
         f"# 企業URL: {company.company_url or '（未登録）'}",
         f"# 備考: {company.note or '（未登録）'}",
         "会話履歴が空の場合は、自己紹介と志望動機を尋ねる最初の質問をしてください。",
@@ -36,11 +37,7 @@ def chat(
 
     サーバーは会話状態を持たない（履歴はクライアントが毎回全部送る）。ここでは何も保存しない。
     """
-    company = (
-        db.query(models.Company)
-        .filter(models.Company.id == chat_in.company_id, models.Company.user_id == current_user.id)
-        .first()
-    )
+    company = db.get(models.Company, chat_in.company_id)
     if company is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="企業情報が見つかりません")
 

@@ -15,16 +15,13 @@ router = APIRouter()
 # 企業情報、全件取得
 @router.get("/companies", response_model=list[CompanyOut])
 def get_companies(db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
-    companies = db.query(models.Company).filter(models.Company.user_id == current_user.id).all()
+    companies = db.query(models.Company).all()
     return companies
 
 # 企業情報、一件取得
 @router.get("/companies/{company_id}", response_model=CompanyOut)
 def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[models.User, Depends(auth.get_current_user)]):
-    company = db.query(models.Company).filter(
-        models.Company.id == company_id,
-        models.Company.user_id == current_user.id,
-    ).first()
+    company = db.get(models.Company, company_id)
     if company is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -36,9 +33,9 @@ def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], curren
 @router.post("/companies", response_model=CompanyOut, status_code=201)
 def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
     company = models.Company(
-        user_id=current_user.id,
         name=company_in.name,
         application_reason=company_in.application_reason,
+        resume=company_in.resume,
         company_url=str(company_in.company_url) if company_in.company_url else None,
         note=company_in.note,
     )
@@ -57,10 +54,7 @@ def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db
 # 企業情報更新
 @router.put("/companies/{company_id}", response_model=CompanyOut)
 def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[models.User, Depends(auth.get_current_user)]):
-    company = db.query(models.Company).filter(
-        models.Company.id == company_id,
-        models.Company.user_id == current_user.id,
-    ).first()
+    company = db.get(models.Company, company_id)
     if company is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -68,6 +62,7 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
         )
     company.name = company_in.name
     company.application_reason = company_in.application_reason
+    company.resume = company_in.resume
     company.company_url = str(company_in.company_url) if company_in.company_url else None
     company.note = company_in.note
     try:
@@ -84,10 +79,7 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
 # 企業情報削除
 @router.delete("/companies/{company_id}", status_code=204)
 def delete_company(company_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[models.User, Depends(auth.get_current_user)]):
-    company = db.query(models.Company).filter(
-        models.Company.id == company_id,
-        models.Company.user_id == current_user.id,
-    ).first()
+    company = db.get(models.Company, company_id)
     if company is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
