@@ -72,6 +72,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         connection.execute(text("SELECT pg_advisory_lock(20260820)"))
+        # ここで commit しないと autobegin したトランザクションに migration が相乗りし、
+        # 接続クローズ時に DDL ごとロールバックされる（advisory lock はセッション単位なので commit 後も残る）
+        connection.commit()
 
         context.configure(
             connection=connection, target_metadata=target_metadata
