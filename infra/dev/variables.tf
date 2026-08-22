@@ -50,5 +50,10 @@ variable "db_username" {
 
 variable "amplify_branch_name" {
   type        = string
-  description = "手動ZIP配備用のAmplify branch名"
+  description = "GitHub Actionsで静的成果物を直接配備するAmplify branch名"
+}
+
+variable "github_repository" {
+  type        = string
+  description = "Amplify配備を許可するGitHubリポジトリ(owner/repository)"
 }

@@ -2,7 +2,7 @@
 
 FastAPIサンプルアプリをECS Fargate上で動かすためのdev環境の、構築から破棄までの一連の手順です。
 
-フロントエンドは Git 非接続の Amplify Hosting に静的ファイルの ZIP を手動配備する。API は CloudFront の HTTPS ドメインから公開し、CloudFront は既存 ALB へ HTTP で転送する。ALB は CloudFront managed prefix list と origin custom header により直接アクセスを遮断する。
+フロントエンドは Git 非接続の Amplify Hosting に、GitHub Actions が静的ファイルの ZIP を直接配備する。API は CloudFront の HTTPS ドメインから公開し、CloudFront は既存 ALB へ HTTP で転送する。ALB は CloudFront managed prefix list と origin custom header により直接アクセスを遮断する。
 
 ## 前提条件
 
@@ -40,7 +40,8 @@ terraform apply
 - `alb_dns_name` … CloudFront だけが接続できる ALB のドメイン名
 - `ecr_repository_url` … イメージのpush先
 - `ecs_cluster_name` / `ecs_service_name` … ECS操作時に使う名前
-- `amplify_app_id` / `amplify_app_url` / `amplify_branch_url` … Amplify の手動配備・公開先に使う値
+- `amplify_app_id` / `amplify_app_url` / `amplify_branch_url` … Amplify の直接配備・公開先に使う値
+- `github_actions_amplify_deploy_role_arn` … GitHub Actions が Amplify 配備専用に引き受ける OIDC ロール
 - `api_cloudfront_url` … フロントエンドの `NEXT_PUBLIC_API_BASE_URL` に指定する HTTPS の API URL
 
 > **注意**: `apply`直後はECSサービスがECRリポジトリ内の`:latest`イメージを起動しようとしますが、初回はイメージが存在しないためタスクが起動失敗を繰り返します。次の手順でイメージをpushしてください。
@@ -63,11 +64,21 @@ docker push "$ECR_REPO:latest"
 
 `example-backend`はコンテナ起動時に`alembic upgrade head`→シーダー(`seed.py`)→`uvicorn`起動の順に実行する。DB接続情報(`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD`)はECSタスク定義から環境変数として渡している(`DB_USERNAME`/`DB_PASSWORD`はRDSのマスターパスワードSecretから注入)。動作確認は`curl http://<alb_dns_name>/items`で行う。
 
-## Amplify への初回手動配備
+## GitHub ActionsによるAmplify直接配備の初期設定
 
-Terraform apply 後、AWS コンソールで `amplify_app_id` の App を開き、`amplify_branch_name`（dev は `main`）へ静的ファイルの ZIP を手動配備する。ZIP の作成方法と Next.js の静的出力設定は #19 の担当範囲であり、このディレクトリでは管理しない。
+Terraform apply 後、リポジトリの GitHub Actions Variables に以下を設定する。値はすべて `terraform output` から取得でき、GitHub Secrets に長期 AWS アクセスキーを保存しない。
 
-配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。フロントエンドをビルドするときは、`api_cloudfront_url` を `NEXT_PUBLIC_API_BASE_URL` に指定する。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0016 で受容した HTTP 区間である。
+| Variable | 値 |
+|---|---|
+| `AWS_REGION` | `ap-northeast-1` |
+| `AWS_ROLE_TO_ASSUME` | `terraform output -raw github_actions_amplify_deploy_role_arn` |
+| `AMPLIFY_APP_ID` | `terraform output -raw amplify_app_id` |
+| `AMPLIFY_BRANCH_NAME` | `main`（`terraform.tfvars` の `amplify_branch_name`） |
+| `NEXT_PUBLIC_API_BASE_URL` | `terraform output -raw api_cloudfront_url` |
+
+ロールは `study-basic-hackathon/hanasu` の `main` ブランチの OIDC token だけを信頼し、`CreateDeployment`、`StartDeployment`、`GetJob`、`GetBranch` だけを Amplify branch に許可する。Terraform の `plan` / `apply` / `destroy` 権限は付与しない。
+
+Next.js の静的出力と、`out/` の中身を ZIP 化して Amplify へ直接配備する GitHub Actions workflow は #19 の担当範囲であり、このディレクトリでは管理しない。配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0017 で受容した HTTP 区間である。
 
 ## 3. ECSに最新イメージを反映
 

@@ -1,9 +1,9 @@
 resource "aws_amplify_app" "frontend" {
   name        = "${local.name_prefix}-frontend"
-  description = "hanasu frontend: Git非接続の手動ZIP配備用"
+  description = "hanasu frontend: Git非接続のGitHub Actions直接配備用"
   platform    = "WEB"
 
-  # Gitリポジトリを接続せず、AWSコンソールから静的ファイルのZIPを手動配備する。
+  # Gitリポジトリを接続せず、GitHub Actionsから静的ファイルのZIPを直接配備する。
   enable_branch_auto_build = false
 
   tags = {

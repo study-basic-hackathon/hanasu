@@ -4,7 +4,7 @@ output "alb_dns_name" {
 }
 
 output "amplify_app_id" {
-  description = "手動ZIP配備に使用するAmplify App ID"
+  description = "GitHub Actionsの直接配備に使用するAmplify App ID"
   value       = aws_amplify_app.frontend.id
 }
 
@@ -14,8 +14,13 @@ output "amplify_app_url" {
 }
 
 output "amplify_branch_url" {
-  description = "手動ZIP配備後にフロントエンドを公開するAmplify branch URL"
+  description = "GitHub Actionsの直接配備後にフロントエンドを公開するAmplify branch URL"
   value       = local.amplify_branch_url
+}
+
+output "github_actions_amplify_deploy_role_arn" {
+  description = "GitHub ActionsがAmplifyへ直接配備するときに引き受けるOIDCロールのARN"
+  value       = aws_iam_role.github_actions_amplify_deploy.arn
 }
 
 output "api_cloudfront_domain_name" {
