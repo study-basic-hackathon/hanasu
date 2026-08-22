@@ -31,14 +31,14 @@ def upgrade() -> None:
     )
     op.create_table('companies',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
-    sa.Column('application_reason', sa.Text(), nullable=True),
+    sa.Column('company_name', sa.String(), nullable=False),
+    sa.Column('motivation', sa.Text(), nullable=True),
     sa.Column('resume', sa.Text(), nullable=True),
     sa.Column('company_url', sa.String(), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name', name='uq_companies_name')
+    sa.UniqueConstraint('company_name', name='uq_companies_company_name')
     )
     # ### end Alembic commands ###
 

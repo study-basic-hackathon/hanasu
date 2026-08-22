@@ -33,8 +33,8 @@ def get_company(company_id: int, db: Annotated[Session, Depends(get_db)], curren
 @router.post("/companies", response_model=CompanyOut, status_code=201)
 def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db)],current_user: Annotated[models.User,Depends(auth.get_current_user)]):
     company = models.Company(
-        name=company_in.name,
-        application_reason=company_in.application_reason,
+        company_name=company_in.company_name,
+        motivation=company_in.motivation,
         resume=company_in.resume,
         company_url=str(company_in.company_url) if company_in.company_url else None,
         note=company_in.note,
@@ -60,8 +60,8 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
             status_code=status.HTTP_404_NOT_FOUND,
             detail="企業情報が見つかりません",
         )
-    company.name = company_in.name
-    company.application_reason = company_in.application_reason
+    company.company_name = company_in.company_name
+    company.motivation = company_in.motivation
     company.resume = company_in.resume
     company.company_url = str(company_in.company_url) if company_in.company_url else None
     company.note = company_in.note
