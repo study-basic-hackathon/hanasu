@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import create_engine
 from sqlalchemy import text
 
 from alembic import context
@@ -17,8 +16,9 @@ from app.database import DATABASE_URL, Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# 接続先は alembic.ini ではなく環境変数から（ローカル/コンテナ/RDSで差し替え可能に）
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+# 接続先(DATABASE_URL)はConfigParser経由(config.set_main_option)で渡すと、
+# RDSの自動生成パスワードに含まれる"%"が補間構文として解釈されValueErrorになるため、
+# create_engine(DATABASE_URL) を直接使う。
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -45,9 +45,8 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -64,11 +63,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(DATABASE_URL)
 
     with connectable.connect() as connection:
         connection.execute(text("SELECT pg_advisory_lock(20260820)"))

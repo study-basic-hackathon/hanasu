@@ -20,12 +20,16 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ECSタスク起動時にRDSのマスターパスワード(Secrets Manager)を環境変数として注入するために必要
+# ECSタスク起動時にRDSのマスターパスワードやbackend用シークレット(Secrets Manager)を
+# 環境変数として注入するために必要
 data "aws_iam_policy_document" "ecs_task_execution_secrets" {
   statement {
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_db_instance.main.master_user_secret[0].secret_arn]
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_db_instance.main.master_user_secret[0].secret_arn,
+      aws_secretsmanager_secret.jwt_secret_key.arn,
+    ]
   }
 }
 
@@ -58,6 +62,20 @@ data "aws_iam_policy_document" "ecs_task_bedrock" {
       [data.aws_bedrock_inference_profile.bedrock.inference_profile_arn],
       [for m in data.aws_bedrock_inference_profile.bedrock.models : m.model_arn],
     )
+  }
+
+  # anthropic SDKのAnthropicBedrockはbedrock-runtimeのホスト名を叩くが、
+  # このモデルの実行認可は内部的にbedrock-mantle側でも評価される(実機検証で確認済み)ため、
+  # 両方の権限が無いとPermissionDeniedになる。
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock-mantle:CreateInference",
+      "bedrock-mantle:GetProject",
+      "bedrock-mantle:ListProjects",
+      "bedrock-mantle:ListTagsForResources",
+    ]
+    resources = ["arn:aws:bedrock-mantle:${var.region}:${data.aws_caller_identity.current.account_id}:project/*"]
   }
 }
 

@@ -1,8 +1,7 @@
-env               = "dev"
-project_name      = "hanasu"
-region            = "ap-northeast-1"
-vpc_cidr          = "10.0.0.0/16"
-health_check_path = "/"
+env          = "dev"
+project_name = "hanasu"
+region       = "ap-northeast-1"
+vpc_cidr     = "10.0.0.0/16"
 
 db_engine_version    = "16"
 db_instance_class    = "db.t4g.micro"

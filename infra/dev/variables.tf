@@ -18,11 +18,6 @@ variable "vpc_cidr" {
   description = "VPCのCIDRブロック"
 }
 
-variable "health_check_path" {
-  type        = string
-  description = "ALBターゲットグループのヘルスチェックパス"
-}
-
 variable "db_engine_version" {
   type        = string
   description = "RDS(PostgreSQL)のエンジンバージョン"

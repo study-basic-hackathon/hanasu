@@ -10,10 +10,10 @@ import os
 def _call_bedrock(system: str, messages: list[dict], max_tokens: int, timeout: float) -> str:
     """Bedrock を1回呼んで応答テキストを返す。失敗は分かるメッセージの RuntimeError に変換する。"""
     import anthropic
-    from anthropic import AnthropicBedrockMantle  # 遅延import
+    from anthropic import AnthropicBedrock  # 遅延import
 
     # 既定値（タイムアウト10分・リトライ2回）だと障害時にワーカーを長時間占有するため明示する
-    client = AnthropicBedrockMantle(
+    client = AnthropicBedrock(
         aws_region=os.getenv("AWS_REGION", "ap-northeast-1"),
         timeout=timeout,
         max_retries=1,
@@ -21,9 +21,9 @@ def _call_bedrock(system: str, messages: list[dict], max_tokens: int, timeout: f
 
     try:
         response = client.messages.create(
-            # Bedrock のモデルIDは "anthropic." プレフィックス付き。
+            # Bedrock のモデルIDはオンデマンド非対応のため推論プロファイルIDを渡す。
             # getenv の第2引数でなく or なのは、compose が未設定時に空文字を注入するため（空でもフォールバックさせる）
-            model=os.getenv("BEDROCK_MODEL_ID") or "anthropic.claude-opus-4-8",
+            model=os.getenv("BEDROCK_MODEL_ID") or "jp.anthropic.claude-sonnet-4-6",
             max_tokens=max_tokens,
             system=system,
             messages=messages,

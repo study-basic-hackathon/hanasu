@@ -46,6 +46,8 @@ terraform apply
 
 > **注意**: `apply`直後はECSサービスがECRリポジトリ内の`:latest`イメージを起動しようとしますが、初回はイメージが存在しないためタスクが起動失敗を繰り返します。次の手順でイメージをpushしてください。
 
+ECSタスク定義は常にリポジトリ直下の `backend/`(本実装)を動かす。`bedrock:InvokeModel`権限を持つECSタスクロール(`aws_iam_role.ecs_task`)がタスクに割り当てられ(Bedrock呼び出し用)、RDSのマスターパスワードから組み立てた`DATABASE_URL`と`JWT_SECRET_KEY`をSecrets Manager経由で注入する(`infra/dev/secrets.tf`)。
+
 ## 2. コンテナイメージのビルド & ECRへpush
 
 ECRへのログインは認証トークン発行後12時間有効です。トークンが切れていない限り、この手順は毎回不要です。
@@ -57,12 +59,12 @@ aws ecr get-login-password --region ap-northeast-1 \
 ECR_REPO=$(terraform output -raw ecr_repository_url)
 
 # provenance/sbom付きでbuildするとECRへのpushが403で失敗することがあるため無効化する
-docker build --provenance=false --sbom=false -t hanasu-api ./example-backend
+docker build --provenance=false --sbom=false -t hanasu-api ../../backend
 docker tag hanasu-api:latest "$ECR_REPO:latest"
 docker push "$ECR_REPO:latest"
 ```
 
-`example-backend`はコンテナ起動時に`alembic upgrade head`→シーダー(`seed.py`)→`uvicorn`起動の順に実行する。DB接続情報(`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USERNAME`/`DB_PASSWORD`)はECSタスク定義から環境変数として渡している(`DB_USERNAME`/`DB_PASSWORD`はRDSのマスターパスワードSecretから注入)。動作確認は`curl http://<alb_dns_name>/items`で行う。
+`backend/`はコンテナ起動時に`alembic upgrade head`→`uvicorn`起動の順に実行する。DB接続情報は`DATABASE_URL`(Secrets Manager経由)で渡している。動作確認は`curl $(terraform output -raw api_cloudfront_url)/health`で行う(`api_cloudfront_url`は`https://`込みの値なので先頭に重ねて付けない)。
 
 ## GitHub ActionsによるAmplify直接配備の初期設定
 
