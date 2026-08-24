@@ -84,3 +84,18 @@ resource "aws_iam_role_policy" "ecs_task_bedrock" {
   role   = aws_iam_role.ecs_task.id
   policy = data.aws_iam_policy_document.ecs_task_bedrock.json
 }
+
+# 以下、面接官の発言の音声化（POST /interviews/tts）。
+data "aws_iam_policy_document" "ecs_task_polly" {
+  statement {
+    effect    = "Allow"
+    actions   = ["polly:SynthesizeSpeech"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_polly" {
+  name   = "${local.name_prefix}-ecs-task-polly"
+  role   = aws_iam_role.ecs_task.id
+  policy = data.aws_iam_policy_document.ecs_task_polly.json
+}

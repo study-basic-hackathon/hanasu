@@ -22,3 +22,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     text: str              # 次のAIの返答（次の質問）
+
+
+class TtsRequest(BaseModel):
+    #3000 は Polly の1リクエスト上限
+    text: str = Field(min_length=1, max_length=3000)
