@@ -1,4 +1,4 @@
-import type { Application } from "@/mocks/types";
+import type { Application } from "@/lib/domain";
 
 /**
  * 「登録済みの情報」の区分（S-06 3.1）。
