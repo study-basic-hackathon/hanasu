@@ -1,0 +1,194 @@
+name: Deploy backend to Amazon ECS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-backend-to-ecs
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test, build, and deploy backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_BACKEND_ROLE_TO_ASSUME: ${{ vars.AWS_BACKEND_ROLE_TO_ASSUME }}
+      ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}
+      ECS_CLUSTER_NAME: ${{ vars.ECS_CLUSTER_NAME }}
+      ECS_SERVICE_NAME: ${{ vars.ECS_SERVICE_NAME }}
+      BACKEND_API_BASE_URL: ${{ vars.BACKEND_API_BASE_URL }}
+      IMAGE_URI: ${{ vars.ECR_REPOSITORY_URL }}:latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate deployment settings
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_variables=(
+            AWS_REGION
+            AWS_BACKEND_ROLE_TO_ASSUME
+            ECR_REPOSITORY_URL
+            ECS_CLUSTER_NAME
+            ECS_SERVICE_NAME
+            BACKEND_API_BASE_URL
+          )
+          for variable_name in "${required_variables[@]}"; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              echo "::error::Repository variable ${variable_name} is not set."
+              exit 1
+            fi
+          done
+
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "::error::This workflow can deploy only refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "${AWS_REGION}" =~ ^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$ ]]; then
+            echo "::error::AWS_REGION has an invalid format."
+            exit 1
+          fi
+          if [[ ! "${AWS_BACKEND_ROLE_TO_ASSUME}" =~ ^arn:aws:iam::[0-9]{12}:role/.+$ ]]; then
+            echo "::error::AWS_BACKEND_ROLE_TO_ASSUME has an invalid format."
+            exit 1
+          fi
+
+          ecr_repository_pattern="^[0-9]{12}\\.dkr\\.ecr\\.${AWS_REGION}\\.amazonaws\\.com/[a-z0-9][a-z0-9._/-]*$"
+          if [[ ! "${ECR_REPOSITORY_URL}" =~ ${ecr_repository_pattern} ]]; then
+            echo "::error::ECR_REPOSITORY_URL must be an untagged ECR repository URL in AWS_REGION."
+            exit 1
+          fi
+          if [[ ! "${BACKEND_API_BASE_URL}" =~ ^https://[^[:space:]]+$ ]]; then
+            echo "::error::BACKEND_API_BASE_URL must be an HTTPS URL."
+            exit 1
+          fi
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install Python
+        run: uv python install 3.14
+
+      - name: Run backend tests
+        id: test
+        working-directory: backend
+        env:
+          JWT_SECRET_KEY: github-actions-test-secret
+        run: uv run --frozen python -m unittest discover -s tests
+
+      - name: Build backend image
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --provenance=false \
+            --sbom=false \
+            --tag "${IMAGE_URI}" \
+            backend
+
+      - name: Configure AWS credentials
+        id: credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_BACKEND_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActionsBackendDeploy
+
+      - name: Log in to Amazon ECR
+        id: ecr_login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push backend image
+        id: push
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${IMAGE_URI}"
+
+      - name: Start ECS deployment
+        id: update_service
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER_NAME}" \
+            --service "${ECS_SERVICE_NAME}" \
+            --force-new-deployment \
+            --no-cli-pager >/dev/null
+
+      - name: Wait for ECS service to stabilize
+        id: wait_service
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable \
+            --cluster "${ECS_CLUSTER_NAME}" \
+            --services "${ECS_SERVICE_NAME}"
+
+      - name: Verify backend health through CloudFront
+        id: health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_url="${BACKEND_API_BASE_URL%/}/health"
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 12 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            "${health_url}"
+          echo
+          echo "Health check succeeded: ${health_url}"
+
+      - name: Write deployment summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          JOB_RESULT: ${{ job.status }}
+          VALIDATE_RESULT: ${{ steps.validate.outcome }}
+          TEST_RESULT: ${{ steps.test.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          CREDENTIALS_RESULT: ${{ steps.credentials.outcome }}
+          ECR_LOGIN_RESULT: ${{ steps.ecr_login.outcome }}
+          PUSH_RESULT: ${{ steps.push.outcome }}
+          UPDATE_RESULT: ${{ steps.update_service.outcome }}
+          STABILIZE_RESULT: ${{ steps.wait_service.outcome }}
+          HEALTH_RESULT: ${{ steps.health.outcome }}
+        run: |
+          {
+            echo "### Backend deployment"
+            echo "- Result: \`${JOB_RESULT}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Image: \`${IMAGE_URI}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER_NAME}\`"
+            echo "- ECS service: \`${ECS_SERVICE_NAME}\`"
+            echo "- API health endpoint: \`${BACKEND_API_BASE_URL%/}/health\`"
+            echo
+            echo "| Step | Result |"
+            echo "|---|---|"
+            echo "| Validate settings | \`${VALIDATE_RESULT}\` |"
+            echo "| Backend tests | \`${TEST_RESULT}\` |"
+            echo "| Build image | \`${BUILD_RESULT}\` |"
+            echo "| Configure AWS credentials | \`${CREDENTIALS_RESULT}\` |"
+            echo "| Log in to ECR | \`${ECR_LOGIN_RESULT}\` |"
+            echo "| Push image | \`${PUSH_RESULT}\` |"
+            echo "| Update ECS service | \`${UPDATE_RESULT}\` |"
+            echo "| Wait for stable service | \`${STABILIZE_RESULT}\` |"
+            echo "| CloudFront health check | \`${HEALTH_RESULT}\` |"
+          } >>"${GITHUB_STEP_SUMMARY}"
