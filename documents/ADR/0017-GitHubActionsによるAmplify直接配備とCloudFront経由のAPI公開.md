@@ -1,6 +1,6 @@
 # ADR-0017: GitHub Actions による Amplify 直接配備と CloudFront 経由の API 公開
 
-- ステータス: 決定
+- ステータス: 廃止（ADR-0019 で置き換え）
 - 日付: 2026-08-22
 - 置き換える ADR: [ADR-0016](0016-Amplifyの手動配備とCloudFront経由のAPI公開.md)
 - 依存: [ADR-0012](0012-フロントエンドデプロイ先.md)（フロントエンドのデプロイ先は Amplify Hosting）

@@ -92,7 +92,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Amplify Hosting へ配備する
 
-`next.config.ts` の静的出力により、`npm run build` は `out/` を生成します。`.github/workflows/deploy-frontend-to-amplify.yml` は `main` への push と `workflow_dispatch` で起動し、次の処理だけを行います。
+`next.config.ts` の静的出力により、`npm run build` は `out/` を生成します。`.github/workflows/deploy-frontend-to-amplify.yml` は `workflow_dispatch` による手動実行だけで起動し、次の処理だけを行います。
 
 1. `frontend/package.json` の `engines.node` から Node.js 24.x を設定する
 2. `NEXT_PUBLIC_API_BASE_URL` を渡して依存関係をインストールし、静的成果物をビルドする
