@@ -1,9 +1,6 @@
 name: Deploy frontend to Amplify Hosting
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:

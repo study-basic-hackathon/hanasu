@@ -122,7 +122,7 @@ Terraform apply 後、リポジトリの GitHub Actions Variables に以下を�
 
 ロールは immutable ID を含む `study-basic-hackathon@212195036/hanasu@1319873544` の `main` ブランチの OIDC token だけを信頼し、`CreateDeployment`、`StartDeployment`、`GetJob`、`GetBranch` だけを Amplify branch に許可する。Terraform の `plan` / `apply` / `destroy` 権限は付与しない。
 
-Next.js の静的出力と、`out/` の中身を ZIP 化して Amplify へ直接配備する GitHub Actions workflow は #19 の担当範囲であり、このディレクトリでは管理しない。配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0017 で受容した HTTP 区間である。
+Next.js の静的出力と、`out/` の中身を ZIP 化して Amplify へ直接配備する GitHub Actions workflow は #19 の担当範囲であり、このディレクトリでは管理しない。配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0019 で受容した HTTP 区間である。
 
 ## 3. ECSに最新イメージを反映
 
