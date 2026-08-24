@@ -27,7 +27,7 @@ data "aws_iam_policy_document" "github_actions_amplify_deploy_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # 現在のGitHub OIDC subject形式に合わせ、対象リポジトリの対象branchに限定する。
+    # immutableなorganization/repository IDを含むsubjectで、対象リポジトリの対象branchに限定する。
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"

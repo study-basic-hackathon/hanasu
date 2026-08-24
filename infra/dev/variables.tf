@@ -55,5 +55,5 @@ variable "amplify_branch_name" {
 
 variable "github_repository" {
   type        = string
-  description = "Amplify配備を許可するGitHubリポジトリ(owner/repository)"
+  description = "Amplify配備を許可するGitHubリポジトリのOIDC immutable識別子(owner@owner_id/repository@repository_id)"
 }
