@@ -13,13 +13,13 @@ def synthesize(text: str) -> bytes:
     import boto3  # 遅延import
     from botocore.config import Config
 
-    client = boto3.client(
-        "polly",
-        region_name=os.getenv("AWS_REGION", "ap-northeast-1"),
-        # 既定値だと障害時に長時間待つため明示する
-        config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 1}),
-    )
     try:
+        client = boto3.client(
+            "polly",
+            region_name=os.getenv("AWS_REGION", "ap-northeast-1"),
+            # 既定値だと障害時に長時間待つため明示する
+            config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 1}),
+        )
         response = client.synthesize_speech(
             Engine="neural",
             VoiceId=os.getenv("POLLY_VOICE_ID") or "Tomoko",
