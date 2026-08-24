@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { filledSections } from "@/lib/application";
-import type { Application } from "@/mocks/types";
+import type { Application } from "@/lib/domain";
 
 const emptyApplication: Application = {
   id: 1,

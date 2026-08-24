@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
+import type { Evaluation } from "@/lib/domain";
+import { QUESTION_STRENGTH_LABEL } from "@/lib/domain";
 import { formatFiller, formatSpeakingSpeed } from "@/lib/format";
 import {
   SCORE_TEXT_CLASS,
@@ -16,28 +16,13 @@ import {
   scorePercent,
   SCORE_BAR_CLASS,
 } from "@/lib/score";
-import type { Evaluation, EvaluationStatus } from "@/mocks/types";
-import { QUESTION_STRENGTH_LABEL } from "@/mocks/types";
 
 type EvaluationViewProps = {
   evaluation: Evaluation;
   /** S-08 から続けて開いたか。失敗したときの導線が変わる（S-14 5章） */
   fromInterview: boolean;
+  onRetry?: () => void;
 };
-
-/** 静的出力後も `?from=interview` をブラウザで判定する。 */
-export function ReturnAwareEvaluationView({
-  evaluation,
-}: Pick<EvaluationViewProps, "evaluation">) {
-  const searchParams = useSearchParams();
-
-  return (
-    <EvaluationView
-      evaluation={evaluation}
-      fromInterview={searchParams.get("from") === "interview"}
-    />
-  );
-}
 
 /** 合否の目安（S-14 4.2）。しきい値はスコアの色分けと同じ */
 function passLabel(totalScore: number): string {
@@ -60,16 +45,14 @@ function speedComment(value: number): string {
 export function EvaluationView({
   evaluation,
   fromInterview,
+  onRetry,
 }: EvaluationViewProps) {
-  // 「評価をやり直す」で処理中に戻る（S-14 5章）
-  const [status, setStatus] = useState<EvaluationStatus>(evaluation.status);
-
-  if (status === "processing") return <ProcessingCard />;
-  if (status === "failed") {
+  if (evaluation.status === "processing") return <ProcessingCard />;
+  if (evaluation.status === "failed") {
     return (
       <FailedCard
-        fromInterview={fromInterview}
-        onRetry={() => setStatus("processing")}
+        fromInterview={fromInterview && onRetry !== undefined}
+        onRetry={onRetry}
       />
     );
   }
@@ -110,7 +93,7 @@ function FailedCard({
   onRetry,
 }: {
   fromInterview: boolean;
-  onRetry: () => void;
+  onRetry?: () => void;
 }) {
   return (
     <PageContainer width={1080} className="grid place-items-center">
@@ -160,12 +143,12 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
 
   const isTutorial = evaluation.company_id === null;
   const conditions = isTutorial
-    ? `チュートリアル / ${evaluation.turn_count} ターン`
+    ? `チュートリアル / ${evaluation.turn_count ?? "—"} ターン`
     : `${evaluation.company_name} / 強度 ${
         evaluation.question_strength
           ? QUESTION_STRENGTH_LABEL[evaluation.question_strength]
           : "—"
-      } / ${evaluation.turn_count} ターン`;
+      } / ${evaluation.turn_count ?? "—"} ターン`;
 
   return (
     <PageContainer width={1080} className="flex flex-col gap-5">
@@ -213,12 +196,16 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
       </div>
 
       <div className="grid grid-cols-3 gap-5">
-        <ScoreCard
-          label="話の速さ"
-          score={scores.speaking_speed.score}
-          measured={formatSpeakingSpeed(scores.speaking_speed.value)}
-          note={speedComment(scores.speaking_speed.value)}
-        />
+        {scores.speaking_speed ? (
+          <ScoreCard
+            label="話の速さ"
+            score={scores.speaking_speed.score}
+            measured={formatSpeakingSpeed(scores.speaking_speed.value)}
+            note={speedComment(scores.speaking_speed.value)}
+          />
+        ) : (
+          <UnmeasuredScoreCard label="話の速さ" />
+        )}
         {/* フィラーの数は補足を持たない（S-14 4.3） */}
         <ScoreCard
           label="フィラーの数"
@@ -249,6 +236,24 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
         合否の目安は本サービス内の参考値であり、実際の選考結果とは関係ありません。
       </p>
     </PageContainer>
+  );
+}
+
+function UnmeasuredScoreCard({ label }: { label: string }) {
+  return (
+    <Card className="flex flex-col gap-3.5 p-6">
+      <span className="text-label text-ink-sub">{label}</span>
+      <div className="flex items-baseline gap-2">
+        <span className="text-score-item leading-none font-bold text-ink-muted">
+          —
+        </span>
+        <span className="text-label text-ink-muted">計測対象外</span>
+      </div>
+      <div className="h-2 rounded-control bg-track" />
+      <p className="text-note leading-[1.8] text-ink-muted">
+        文字入力だけの面接では話す速さを計測しません。
+      </p>
+    </Card>
   );
 }
 

@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { filledSections } from "@/lib/application";
 import { cn } from "@/lib/cn";
+import { listCompanies, type Company } from "@/lib/company-api";
+import type { AnswerMethod, QuestionStrength } from "@/lib/domain";
+import { ANSWER_METHOD_LABEL, QUESTION_STRENGTH_LABEL } from "@/lib/domain";
 import { MAX_TURNS } from "@/lib/interview";
-import { MOCK_APPLICATIONS } from "@/mocks/applications";
-import type { AnswerMethod, QuestionStrength } from "@/mocks/types";
-import { ANSWER_METHOD_LABEL, QUESTION_STRENGTH_LABEL } from "@/mocks/types";
 
 type Mode = "interview" | "practice";
 
@@ -32,10 +31,19 @@ function RadioMark({ selected }: { selected: boolean }) {
   );
 }
 
+function filledCompanySections(company: Company): string[] {
+  return [
+    company.company_url ? "募集要項" : null,
+    company.motivation ? "志望動機" : null,
+    company.resume ? "経歴" : null,
+    company.note ? "備考" : null,
+  ].filter((section): section is string => section !== null);
+}
+
 /**
  * S-05 練習の設定。
  * 選んだ内容はサーバーに保存せず、S-08 / S-09 へ引き渡す（ADR-0008）。
- * 引き渡す状態管理は API 連携のときに入れるため、ここでは遷移だけを行う。
+ * 本番モードの選択内容はクエリ文字列で S-08 へ引き渡す。
  */
 export default function PracticeSetupPage() {
   const router = useRouter();
@@ -43,6 +51,25 @@ export default function PracticeSetupPage() {
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
   const [strength, setStrength] = useState<QuestionStrength>("standard");
   const [companyId, setCompanyId] = useState<number | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    listCompanies(controller.signal)
+      .then((loaded) => {
+        setCompanies(loaded);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setError("応募企業情報を取得できませんでした。時間をおいて再読み込みしてください。");
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, []);
 
   const isPracticeMode = mode === "practice";
   // 本番モードは対象企業が1つ選ばれていることが条件。練習モードは条件なし（S-05 5章）
@@ -177,7 +204,15 @@ export default function PracticeSetupPage() {
             企業を追加
           </Link>
         </div>
-        {MOCK_APPLICATIONS.length === 0 ? (
+        {loading ? (
+          <div className="px-[26px] py-8 text-body-sm text-ink-sub">
+            応募企業情報を読み込んでいます。
+          </div>
+        ) : error ? (
+          <div role="alert" className="px-[26px] py-8 text-body-sm text-danger">
+            {error}
+          </div>
+        ) : companies.length === 0 ? (
           <div className="flex flex-col items-start gap-4 px-[26px] py-8">
             <p className="text-body-sm text-ink-sub">
               登録された企業がありません。企業を追加すると、その内容をもとに質問が作られます。
@@ -194,12 +229,12 @@ export default function PracticeSetupPage() {
               isPracticeMode && "pointer-events-none opacity-50",
             )}
           >
-            {MOCK_APPLICATIONS.map((application) => {
-              const selected = companyId === application.id;
-              const sections = filledSections(application);
+            {companies.map((company) => {
+              const selected = companyId === company.id;
+              const sections = filledCompanySections(company);
               return (
                 <div
-                  key={application.id}
+                  key={company.id}
                   className={cn(
                     "flex items-center gap-3.5 border-b border-divider px-[26px] py-4 last:border-b-0",
                     selected && "bg-accent-soft",
@@ -209,7 +244,7 @@ export default function PracticeSetupPage() {
                     type="button"
                     aria-pressed={selected}
                     disabled={isPracticeMode}
-                    onClick={() => setCompanyId(application.id)}
+                    onClick={() => setCompanyId(company.id)}
                     className="flex flex-1 items-center gap-3.5 text-left"
                   >
                     <RadioMark selected={selected} />
@@ -220,12 +255,11 @@ export default function PracticeSetupPage() {
                           selected ? "font-medium" : "text-ink-label",
                         )}
                       >
-                        {application.company_name}
+                        {company.company_name}
                       </span>
                       {/* 何も入っていなければ職種だけを出す（S-05 3.2） */}
                       <span className="text-note text-ink-sub">
                         {[
-                          application.job_title,
                           sections.length > 0
                             ? `${sections.join("・")}あり`
                             : null,
@@ -236,7 +270,7 @@ export default function PracticeSetupPage() {
                     </span>
                   </button>
                   <Link
-                    href={`/companies/${application.id}/edit?from=/practice/setup`}
+                    href={`/companies/edit?id=${company.id}&from=/practice/setup`}
                     className="text-note text-accent hover:underline"
                   >
                     編集
@@ -262,7 +296,18 @@ export default function PracticeSetupPage() {
           )}
           <Button
             disabled={!canStart}
-            onClick={() => router.push(isPracticeMode ? "/practice" : "/interview")}
+            onClick={() => {
+              if (isPracticeMode) {
+                router.push("/practice");
+                return;
+              }
+              const params = new URLSearchParams({
+                companyId: String(companyId),
+                strength,
+                answerMethod,
+              });
+              router.push(`/interview?${params.toString()}`);
+            }}
             className="px-[34px]"
           >
             開始する

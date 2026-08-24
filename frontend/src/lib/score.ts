@@ -29,6 +29,38 @@ export const SCORE_BAR_CLASS: Record<ScoreLevel, string> = {
 /** 話す速さの適正域（S-14 4.3 / S-12） */
 export const SPEAKING_SPEED_RANGE = { min: 280, max: 320 } as const;
 
+function normalizedScore(score: number): number {
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+/**
+ * #57 確定までの暫定基準。
+ * 適正域を100点とし、範囲から2文字/分離れるごとに1点減点する。
+ */
+export function scoreSpeakingSpeed(charsPerMinute: number): number {
+  const { min, max } = SPEAKING_SPEED_RANGE;
+  const distance =
+    charsPerMinute < min
+      ? min - charsPerMinute
+      : charsPerMinute > max
+        ? charsPerMinute - max
+        : 0;
+  return normalizedScore(100 - distance / 2);
+}
+
+/** #57 確定までの暫定基準。1回/分ごとに15点減点する。 */
+export function scoreFillerRate(fillersPerMinute: number): number {
+  return normalizedScore(100 - fillersPerMinute * 15);
+}
+
+/**
+ * 文字入力を含み「回/分」を出せない場合の暫定基準。
+ * 1回答あたり1回ごとに20点減点する。
+ */
+export function scoreFillersPerAnswer(fillersPerAnswer: number): number {
+  return normalizedScore(100 - fillersPerAnswer * 20);
+}
+
 /** バーの長さはスコアをそのまま百分率にする（72点 → 72%） */
 export function scorePercent(score: number): number {
   return Math.min(100, Math.max(0, score));

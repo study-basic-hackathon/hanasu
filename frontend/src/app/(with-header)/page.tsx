@@ -1,19 +1,22 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DateTime } from "@/components/ui/DateTime";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { formatCount, formatFiller, formatSpeakingSpeed } from "@/lib/format";
-import { SCORE_TEXT_CLASS, scoreLevel, scorePercent } from "@/lib/score";
-import { MOCK_APPLICATIONS } from "@/mocks/applications";
-import { MOCK_EVALUATIONS } from "@/mocks/evaluations";
+import { listCompanies } from "@/lib/company-api";
+import type { Evaluation } from "@/lib/domain";
 import {
   ANSWER_METHOD_LABEL,
   QUESTION_STRENGTH_LABEL,
-  type Evaluation,
-} from "@/mocks/types";
+} from "@/lib/domain";
+import { listEvaluations } from "@/lib/evaluation-api";
+import { formatCount, formatFiller, formatSpeakingSpeed } from "@/lib/format";
+import { SCORE_TEXT_CLASS, scoreLevel, scorePercent } from "@/lib/score";
 
 /** 総合スコアの円。円の内側に数値、その下に `総合スコア`（S-04 3.2） */
 function TotalScoreCircle({ score }: { score: number }) {
@@ -40,21 +43,31 @@ function ScoreRow({
   measured,
 }: {
   label: string;
-  score: number;
+  score: number | null;
   measured?: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex justify-between text-label">
         <span className="text-ink-label">{label}</span>
-        <span className={SCORE_TEXT_CLASS[scoreLevel(score)]}>
-          {score}
+        <span
+          className={
+            score === null
+              ? "text-ink-muted"
+              : SCORE_TEXT_CLASS[scoreLevel(score)]
+          }
+        >
+          {score ?? "—"}
           {measured && (
             <span className="text-ink-muted"> / {measured}</span>
           )}
         </span>
       </div>
-      <ScoreBar score={score} />
+      {score === null ? (
+        <div className="h-1.5 rounded-control bg-track" />
+      ) : (
+        <ScoreBar score={score} />
+      )}
     </div>
   );
 }
@@ -69,7 +82,7 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
       <div className="flex items-baseline justify-between">
         <h2 className="text-body font-bold">直近の評価結果</h2>
         <Link
-          href={`/evaluations/${evaluation.evaluation_id}`}
+          href={`/evaluations/detail?id=${evaluation.evaluation_id}`}
           className="text-label text-accent hover:underline"
         >
           詳細を見る
@@ -80,8 +93,12 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
         <div className="flex flex-1 flex-col gap-4">
           <ScoreRow
             label="話の速さ"
-            score={scores.speaking_speed.score}
-            measured={formatSpeakingSpeed(scores.speaking_speed.value)}
+            score={scores.speaking_speed?.score ?? null}
+            measured={
+              scores.speaking_speed
+                ? formatSpeakingSpeed(scores.speaking_speed.value)
+                : "計測対象外"
+            }
           />
           <ScoreRow
             label="フィラーの数"
@@ -103,7 +120,12 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
             ? QUESTION_STRENGTH_LABEL[evaluation.question_strength]
             : "—"}
         </span>
-        <span>回答方式：{ANSWER_METHOD_LABEL[evaluation.answer_method]}</span>
+        <span>
+          回答方式：
+          {evaluation.answer_method
+            ? ANSWER_METHOD_LABEL[evaluation.answer_method]
+            : "—"}
+        </span>
       </div>
     </Card>
   );
@@ -147,9 +169,34 @@ function SummaryCard({
 }
 
 export default function HomePage() {
+  const [applicationCount, setApplicationCount] = useState(0);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      listCompanies(controller.signal),
+      listEvaluations(controller.signal),
+    ])
+      .then(([companies, loadedEvaluations]) => {
+        setApplicationCount(companies.length);
+        setEvaluations(loadedEvaluations);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setError("ホームの情報を取得できませんでした。時間をおいて再読み込みしてください。");
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
   // 評価結果は全件が返り、直近1件の抽出と件数の算出は画面側で行う（S-04 6章）。
   // 評価が終わっていない結果はスコアを持たないため、完了したものから最も新しい1件を採る
-  const latest = MOCK_EVALUATIONS.filter(
+  const latest = evaluations.filter(
     (evaluation) => evaluation.status === "completed",
   ).reduce<Evaluation | null>(
     (newest, evaluation) =>
@@ -158,8 +205,25 @@ export default function HomePage() {
         : newest,
     null,
   );
-  const applicationCount = MOCK_APPLICATIONS.length;
-  const evaluationCount = MOCK_EVALUATIONS.length;
+  const evaluationCount = evaluations.length;
+
+  if (loading) {
+    return (
+      <PageContainer width={1200} className="text-body-sm text-ink-sub">
+        ホームの情報を読み込んでいます。
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer width={1200}>
+        <p role="alert" className="rounded-control border border-danger/30 bg-danger/5 px-4 py-3 text-body-sm text-danger">
+          {error}
+        </p>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer width={1200} className="flex flex-col gap-6">
