@@ -48,13 +48,21 @@ resource "aws_iam_role" "github_actions_amplify_deploy" {
 
 data "aws_iam_policy_document" "github_actions_amplify_deploy" {
   statement {
+    effect    = "Allow"
+    actions   = ["amplify:GetBranch"]
+    resources = [aws_amplify_branch.frontend.arn]
+  }
+
+  statement {
     effect = "Allow"
     actions = [
       "amplify:CreateDeployment",
-      "amplify:GetBranch",
       "amplify:StartDeployment",
     ]
-    resources = [aws_amplify_branch.frontend.arn]
+    resources = [
+      aws_amplify_branch.frontend.arn,
+      "${aws_amplify_branch.frontend.arn}/deployments/*",
+    ]
   }
 
   statement {
