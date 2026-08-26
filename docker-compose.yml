@@ -17,6 +17,8 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
+      # AmiVoice（文字起こし）のAPIキー。ローカルはルートの .env から渡す。ECS上はSecrets Manager経由
+      AMIVOICE_API_KEY: ${AMIVOICE_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

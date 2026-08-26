@@ -100,6 +100,7 @@ audio: <録音した音声 (webm/opus)>
   "raw_transcript": "%えー% 私は前職で %あの% チームリーダーを...",
   "clean_transcript": "私は前職でチームリーダーを...",
   "filler_count": 2,
+  "filler_count_per_min": 6.3,
   "duration_ms": 19000,
   "chars": 88,
   "chars_per_min": 278
@@ -109,6 +110,7 @@ audio: <録音した音声 (webm/opus)>
 - **AmiVoice に `keepFillerToken=1` を必ず付与する**（[ADR-0010](../ADR/0010-音声認識とLLMの基盤選定.md)）。フィラーは `%えー%` の形で返る
 - **`raw_transcript` を捨てない。** 整形すると評価が機能しなくなる。`clean_transcript` は**画面表示専用**であり、LLM に渡すのは `raw_transcript`
 - **話速は文字数 ÷ 発話時間で算出する。** 音声の長さはサーバー側で取れるため、`duration_ms` / `chars` / `chars_per_min` までサーバーが算出して返す
+- **フィラーの頻度は `filler_count ÷ 発話時間` で算出し、`filler_count_per_min` として小数第1位まで返す**（画面表示は`documents/frontend/01_design/screen_common.md`の「回 / 回/分」形式）
 - **文字入力のターンではこの API を呼ばない**
 
 ### 5.3 `POST /interviews/chat` — 次の質問

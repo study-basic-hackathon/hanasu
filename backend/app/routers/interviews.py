@@ -1,13 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
 from app.routers import auth
-from app.schemas.interview import ChatRequest, ChatResponse
-from app.services import llm
+from app.schemas.interview import ChatRequest, ChatResponse, SttResponse
+from app.services import llm, stt
 
 router = APIRouter()
 
@@ -49,3 +49,21 @@ def chat(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
     return ChatResponse(text=text)
+
+
+@router.post("/interviews/stt", response_model=SttResponse, summary="文字起こし")
+def transcribe(
+    current_user: Annotated[models.User, Depends(auth.get_current_user)],
+    audio: Annotated[UploadFile, File()],
+):
+    """録音音声を文字起こしし、フィラー数・話速指標まで算出して返す。
+
+    音声はここで処理するだけで保存しない（ADR-0007）。
+    """
+    audio_bytes = audio.file.read()
+    try:
+        result = stt.transcribe(audio_bytes, audio.filename or "audio.webm")
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+
+    return SttResponse(**result)

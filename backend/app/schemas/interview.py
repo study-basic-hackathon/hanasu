@@ -22,3 +22,14 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     text: str              # 次のAIの返答（次の質問）
+
+
+# ---- POST /interviews/stt（文字起こし）----
+class SttResponse(BaseModel):
+    raw_transcript: str     # フィラー込み（%えー% 形式）。評価に渡すのはこちら
+    clean_transcript: str   # フィラー除去済み。画面表示専用
+    filler_count: int
+    filler_count_per_min: float
+    duration_ms: int
+    chars: int
+    chars_per_min: int
