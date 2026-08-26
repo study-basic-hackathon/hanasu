@@ -28,6 +28,7 @@ def _build_system_prompt(company: models.Company, intensity: str, max_turns: int
         f"# 応募者の経歴: {company.resume or '（未登録）'}",
         f"# 企業URL: {company.company_url or '（未登録）'}",
         f"# 備考: {company.note or '（未登録）'}",
+        *([f"# 募集要項の要約: {company.job_summary}"] if company.job_summary else []),
         f"# 質問の強度: {intensity}。{_INTENSITY_GUIDE[intensity]}",
         "会話履歴が空の場合は、自己紹介と志望動機を尋ねる最初の質問をしてください。",
     ]
