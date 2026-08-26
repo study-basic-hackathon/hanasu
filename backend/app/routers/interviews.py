@@ -12,7 +12,6 @@ from app.services import llm, tts
 router = APIRouter()
 
 
-# 強度の3択（S-05）を面接官への指示文に読み替える
 _INTENSITY_GUIDE = {
     "楽々": "優しい口調で、基本的な質問を中心にしてください",
     "標準": "一般的な面接と同じ調子で質問してください",
@@ -21,7 +20,6 @@ _INTENSITY_GUIDE = {
 
 
 def _build_system_prompt(company: models.Company, intensity: str, max_turns: int | None, current_turn: int) -> str:
-    """応募情報（企業情報・志望動機・経歴）と練習の設定を面接官の system プロンプトに反映する。"""
     parts = [
         "あなたは採用面接の面接官です。以下の応募情報を踏まえ、応募者への次の質問を1つだけ、日本語で簡潔に返してください。",
         "質問文のみを返し、前置きや解説は書かないでください。",
@@ -34,7 +32,6 @@ def _build_system_prompt(company: models.Company, intensity: str, max_turns: int
         "会話履歴が空の場合は、自己紹介と志望動機を尋ねる最初の質問をしてください。",
     ]
     if max_turns is not None:
-        # 履歴が上限を超えて送られても負数にしない（フロントは上限で打ち切るが、APIは直接も叩ける）
         remaining = max(max_turns - current_turn + 1, 1)
         parts.append(f"面接はあと最大{remaining}問で終わりです（上限{max_turns}ターン中、今は{min(current_turn, max_turns)}ターン目）。残りが少ないほど、面接を締めくくる質問に向かってください。")
     return "\n".join(parts)

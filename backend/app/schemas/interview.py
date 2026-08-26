@@ -11,9 +11,7 @@ class Turn(BaseModel):
 # ---- POST /interviews/chat（次の質問を生成）----
 class ChatRequest(BaseModel):
     company_id: int        # 応募情報（企業情報・志望動機）はサーバーがここから読む
-    # 質問の強度（S-05 の3択そのまま）。サーバーが状態を持たないため毎ターン送る
     intensity: Literal["楽々", "標準", "厳しめ"] = "標準"
-    # 本番モードのターン上限（S-08 では 8）。練習モードは上限がないので省略する
     max_turns: int | None = Field(default=None, ge=1, le=50)
     history: list[Turn] = Field(max_length=50)
 
