@@ -11,6 +11,25 @@ from app.services import llm, stt, tts
 
 router = APIRouter()
 
+# ECSタスクのメモリ(512MiB)を使い切らないための上限。数分の発話でも十分に収まる値
+_MAX_AUDIO_BYTES = 20 * 1024 * 1024
+
+
+def _read_audio_or_413(audio: UploadFile) -> bytes:
+    """音声を上限付きでチャンク読み込みする。超過時は413（読み込み途中で打ち切るため全量はメモリに載らない）。"""
+    chunks = bytearray()
+    while True:
+        chunk = audio.file.read(1024 * 1024)
+        if not chunk:
+            break
+        chunks += chunk
+        if len(chunks) > _MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"音声ファイルが大きすぎます（上限{_MAX_AUDIO_BYTES // (1024 * 1024)}MiB）",
+            )
+    return bytes(chunks)
+
 
 _INTENSITY_GUIDE = {
     "楽々": "優しい口調で、基本的な質問を中心にしてください",
@@ -74,7 +93,7 @@ def transcribe(
 
     音声はここで処理するだけで保存しない（ADR-0007）。
     """
-    audio_bytes = audio.file.read()
+    audio_bytes = _read_audio_or_413(audio)
     try:
         result = stt.transcribe(audio_bytes, audio.filename or "audio.webm")
     except RuntimeError as e:
