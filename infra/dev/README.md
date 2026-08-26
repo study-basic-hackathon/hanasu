@@ -67,7 +67,14 @@ aws secretsmanager put-secret-value \
 rm -f "$SECRET_FILE"
 ```
 
-キーをローテーションする場合も同じコマンドを再実行するだけでよい(ECSタスクは再起動時に最新の値を取得する)。
+キーをローテーションする場合、`put-secret-value`だけでは**稼働中のタスクには反映されない**(Secrets Managerの値はコンテナ起動時に一度読むだけで、動いている間は見に行かない)。値を更新したら、3節と同じ`--force-new-deployment`で新しいタスクに置き換える必要がある。
+
+```bash
+aws ecs update-service \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --service "$(terraform output -raw ecs_service_name)" \
+  --force-new-deployment
+```
 
 ## 2. コンテナイメージのビルド & ECRへpush
 
