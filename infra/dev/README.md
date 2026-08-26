@@ -48,6 +48,18 @@ terraform apply
 
 ECSタスク定義は常にリポジトリ直下の `backend/`(本実装)を動かす。`bedrock:InvokeModel`権限を持つECSタスクロール(`aws_iam_role.ecs_task`)がタスクに割り当てられ(Bedrock呼び出し用)、RDSのマスターパスワードから組み立てた`DATABASE_URL`と`JWT_SECRET_KEY`をSecrets Manager経由で注入する(`infra/dev/secrets.tf`)。
 
+### AmiVoice(文字起こし)のAPIキー投入
+
+`aws_secretsmanager_secret.amivoice_api_key`はTerraformでは入れ物だけを作る(値は外部で発行済みのため、stateに平文で残さないようTerraformでは持たせない)。`apply`後、値を1回だけCLIで投入する。
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw amivoice_api_key_secret_arn)" \
+  --secret-string "実際のAPIキー"
+```
+
+キーをローテーションする場合も同じコマンドを再実行するだけでよい(ECSタスクは再起動時に最新の値を取得する)。
+
 ## 2. コンテナイメージのビルド & ECRへpush
 
 ECRへのログインは認証トークン発行後12時間有効です。トークンが切れていない限り、この手順は毎回不要です。

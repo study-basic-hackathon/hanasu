@@ -27,5 +27,6 @@ locals {
     { name = "DB_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },
     { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" },
     { name = "JWT_SECRET_KEY", valueFrom = aws_secretsmanager_secret.jwt_secret_key.arn },
+    { name = "AMIVOICE_API_KEY", valueFrom = aws_secretsmanager_secret.amivoice_api_key.arn },
   ]
 }

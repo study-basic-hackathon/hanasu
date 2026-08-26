@@ -57,3 +57,8 @@ output "rds_master_user_secret_arn" {
   description = "RDSマスターパスワードが保存されているSecrets ManagerのARN"
   value       = aws_db_instance.main.master_user_secret[0].secret_arn
 }
+
+output "amivoice_api_key_secret_arn" {
+  description = "AmiVoiceのAPIキーを投入するSecrets ManagerのARN(値はapply後にCLIで手動投入する)"
+  value       = aws_secretsmanager_secret.amivoice_api_key.arn
+}
