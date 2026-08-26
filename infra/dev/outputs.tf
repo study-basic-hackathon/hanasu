@@ -23,6 +23,11 @@ output "github_actions_amplify_deploy_role_arn" {
   value       = aws_iam_role.github_actions_amplify_deploy.arn
 }
 
+output "github_actions_backend_deploy_role_arn" {
+  description = "GitHub ActionsがバックエンドをECR/ECSへ配備するときに引き受けるOIDCロールのARN"
+  value       = aws_iam_role.github_actions_backend_deploy.arn
+}
+
 output "api_cloudfront_domain_name" {
   description = "フロントエンドに設定するAPI用CloudFrontのHTTPSドメイン名"
   value       = aws_cloudfront_distribution.api.domain_name

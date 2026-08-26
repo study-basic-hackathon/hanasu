@@ -27,7 +27,7 @@ data "aws_iam_policy_document" "github_actions_amplify_deploy_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # 現在のGitHub OIDC subject形式に合わせ、対象リポジトリの対象branchに限定する。
+    # immutableなorganization/repository IDを含むsubjectで、対象リポジトリの対象branchに限定する。
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
@@ -48,13 +48,21 @@ resource "aws_iam_role" "github_actions_amplify_deploy" {
 
 data "aws_iam_policy_document" "github_actions_amplify_deploy" {
   statement {
+    effect    = "Allow"
+    actions   = ["amplify:GetBranch"]
+    resources = [aws_amplify_branch.frontend.arn]
+  }
+
+  statement {
     effect = "Allow"
     actions = [
       "amplify:CreateDeployment",
-      "amplify:GetBranch",
       "amplify:StartDeployment",
     ]
-    resources = [aws_amplify_branch.frontend.arn]
+    resources = [
+      aws_amplify_branch.frontend.arn,
+      "${aws_amplify_branch.frontend.arn}/deployments/*",
+    ]
   }
 
   statement {
@@ -68,4 +76,78 @@ resource "aws_iam_role_policy" "github_actions_amplify_deploy" {
   name   = "${local.name_prefix}-github-actions-amplify-deploy"
   role   = aws_iam_role.github_actions_amplify_deploy.id
   policy = data.aws_iam_policy_document.github_actions_amplify_deploy.json
+}
+
+data "aws_iam_policy_document" "github_actions_backend_deploy_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repository}:ref:refs/heads/main"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_backend_deploy" {
+  name               = "${local.name_prefix}-github-actions-backend-deploy"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_backend_deploy_assume.json
+
+  tags = {
+    Name = "${local.name_prefix}-github-actions-backend-deploy"
+    Env  = var.env
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_backend_deploy" {
+  statement {
+    sid       = "GetEcrAuthorizationToken"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushBackendImage"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [aws_ecr_repository.api.arn]
+  }
+
+  statement {
+    sid    = "RedeployBackendService"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:UpdateService",
+    ]
+    resources = [aws_ecs_service.api.id]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_backend_deploy" {
+  name   = "${local.name_prefix}-github-actions-backend-deploy"
+  role   = aws_iam_role.github_actions_backend_deploy.id
+  policy = data.aws_iam_policy_document.github_actions_backend_deploy.json
 }

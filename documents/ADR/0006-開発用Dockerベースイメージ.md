@@ -4,7 +4,7 @@
 - 日付: 2026-08-06
 - 依存:
   - **[ADR-0018](0018-GitHubActionsのNodeバージョン.md)(Node.js を 24.x とし `package.json` を GitHub Actions のバージョン入力にする)に依存する。** イメージタグのメジャーバージョン `24` は ADR-0018 の決定に従う。ADR-0018 が更新されれば本イメージのタグも合わせて変更する。
-  - **[ADR-0012](0012-フロントエンドデプロイ先.md)(デプロイ先を Amplify Hosting とする)と [ADR-0017](0017-GitHubActionsによるAmplify直接配備とCloudFront経由のAPI公開.md)(GitHub Actions がビルドする)に依存する。** 本番ビルドは GitHub Actions、本番配信は Amplify Hosting が担うため、このイメージは**開発専用**であり、イメージサイズの最適化が判断軸にならないという前提が成り立っている。
+  - **[ADR-0012](0012-フロントエンドデプロイ先.md)(デプロイ先を Amplify Hosting とする)と [ADR-0019](0019-GitHubActions手動実行によるAmplify直接配備.md)(GitHub Actions がビルドする)に依存する。** 本番ビルドは GitHub Actions、本番配信は Amplify Hosting が担うため、このイメージは**開発専用**であり、イメージサイズの最適化が判断軸にならないという前提が成り立っている。
 
 ## コンテキスト(背景と課題)
 

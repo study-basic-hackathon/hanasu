@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/cn";
-import { MOCK_SIGNED_IN_USER } from "@/mocks/user";
 
 /**
  * ナビ4項目（共通仕様 4.1）。
- * S-07（/companies/...）は「応募先企業」、S-14（/evaluations/[id]）は「履歴」を現在地とする。
+ * S-07（/companies/...）は「応募先企業」、S-14（/evaluations/detail）は「履歴」を現在地とする。
  * 練習モード（S-09）へはナビから直接入れない。
  */
 const NAV_ITEMS = [
@@ -29,6 +29,7 @@ function isCurrent(href: string, pathname: string): boolean {
  */
 export function GlobalHeader() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
 
   return (
     <header className="sticky top-0 z-20 flex h-header flex-none items-center justify-between border-b border-line bg-surface px-8">
@@ -61,18 +62,14 @@ export function GlobalHeader() {
         </nav>
       </div>
       <div className="flex items-center gap-3.5 text-label text-ink-sub">
-        {/* サインイン中の ID。表示のみで、押しても何も起きない */}
-        <span>{MOCK_SIGNED_IN_USER.username}</span>
-        {/*
-          サインアウト（共通仕様 6.3）。確認は挟まない。
-          モックではトークンを持たないため S-01 へ移るだけ
-        */}
-        <Link
-          href="/signin"
+        <span>{user?.username}</span>
+        <button
+          type="button"
+          onClick={signOut}
           className="rounded-control border border-line-strong px-[11px] py-1.5 text-label text-ink hover:bg-canvas"
         >
           サインアウト
-        </Link>
+        </button>
       </div>
     </header>
   );

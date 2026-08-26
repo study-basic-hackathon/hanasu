@@ -37,6 +37,7 @@ def create_company(company_in:CompanyCreate,db: Annotated[Session,Depends(get_db
         motivation=company_in.motivation,
         resume=company_in.resume,
         company_url=str(company_in.company_url) if company_in.company_url else None,
+        job_summary=company_in.job_summary,
         note=company_in.note,
     )
     db.add(company)
@@ -64,6 +65,7 @@ def update_company(company_id: int, company_in: CompanyCreate, db: Annotated[Ses
     company.motivation = company_in.motivation
     company.resume = company_in.resume
     company.company_url = str(company_in.company_url) if company_in.company_url else None
+    company.job_summary = company_in.job_summary
     company.note = company_in.note
     try:
         db.commit()

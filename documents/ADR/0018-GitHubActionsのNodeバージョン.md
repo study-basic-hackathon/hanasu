@@ -5,14 +5,14 @@
 - 置き換える ADR: [ADR-0002](0002-Nodeバージョン.md)（Vercel が `engines.node` を読むことを根拠にした固定方法を、GitHub Actions でビルドする現行方式に合わせて置き換える）
 - 依存:
   - [ADR-0012](0012-フロントエンドデプロイ先.md)（フロントエンドのデプロイ先は Amplify Hosting）
-  - [ADR-0017](0017-GitHubActionsによるAmplify直接配備とCloudFront経由のAPI公開.md)（GitHub Actions が静的成果物をビルドし、Git 非接続の Amplify App へ直接配備する）
+  - [ADR-0019](0019-GitHubActions手動実行によるAmplify直接配備.md)（GitHub Actions が静的成果物をビルドし、Git 非接続の Amplify App へ直接配備する）
 - 被依存:
   - [ADR-0006](0006-開発用Dockerベースイメージ.md)（開発用 Docker イメージの Node.js メジャーバージョンを本 ADR に合わせる）
   - [#19](https://github.com/study-basic-hackathon/hanasu/issues/19)（GitHub Actions の Node.js バージョン設定を実装する）
 
 ## コンテキスト（背景と課題）
 
-ADR-0002 は、Vercel が `package.json` の `engines.node` を読むことを根拠に、Node.js 24.x と固定方法を決めていた。ADR-0012 でデプロイ先を Amplify Hosting へ変更したためこの根拠は失効し、さらに ADR-0017 で、Amplify はビルドせず GitHub Actions が静的成果物をビルドして直接配備する方式になった。
+ADR-0002 は、Vercel が `package.json` の `engines.node` を読むことを根拠に、Node.js 24.x と固定方法を決めていた。ADR-0012 でデプロイ先を Amplify Hosting へ変更したためこの根拠は失効し、さらに ADR-0019 で、Amplify はビルドせず GitHub Actions が静的成果物をビルドして直接配備する方式になった。
 
 Node.js 24.x の選定は維持したまま、GitHub Actions の実行環境へバージョンを反映する方法と、`engines.node`、Dockerfile、Amplify の責務を決め直す必要がある。
 
@@ -34,7 +34,7 @@ Node.js 24.x の選定は維持したまま、GitHub Actions の実行環境へ�
 
 ## 決定要因
 
-- ADR-0017 で決まったビルド責務との整合
+- ADR-0019 で決まったビルド責務との整合
 - Node.js バージョン値の重複と更新漏れの少なさ
 - 設定がリポジトリに残り、参照元が明確であること
 - ローカル Docker と GitHub Actions のメジャーバージョンを揃えられること
@@ -64,7 +64,7 @@ Node.js 24.x の選定は維持したまま、GitHub Actions の実行環境へ�
 - [#19](https://github.com/study-basic-hackathon/hanasu/issues/19) で `actions/setup-node` の `node-version-file` に `frontend/package.json` を指定し、ビルドログの `node --version` で 24.x を確認する。
 - Node.js メジャーバージョンを更新するときは、`frontend/package.json` と開発用 Dockerfile のイメージタグを同時に更新する。
 - `CLAUDE.md` と `frontend/Dockerfile` に残る旧デプロイ方式の説明は、#19 または別のドキュメント整合タスクで更新する。
-- 再検討のトリガー: ADR-0017 を置き換えて Amplify ネイティブビルドへ移行する場合、Node.js 24 がサポート対象外になる場合、または `actions/setup-node` が `engines.node` の読み取りをサポートしなくなる場合。
+- 再検討のトリガー: ADR-0019 を置き換えて Amplify ネイティブビルドへ移行する場合、Node.js 24 がサポート対象外になる場合、または `actions/setup-node` が `engines.node` の読み取りをサポートしなくなる場合。
 
 ## 備考
 

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Noto_Sans_JP } from "next/font/google";
+
+import { AuthProvider } from "@/components/auth/AuthProvider";
+
 import "./globals.css";
 
 const notoSansJP = Noto_Sans_JP({
@@ -24,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         1280px を下回る幅は横スクロールを許容し、レイアウトは組み替えない
       */}
       <body className="flex min-h-full min-w-[1280px] flex-col bg-canvas text-body text-ink">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

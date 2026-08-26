@@ -1,29 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DateTime } from "@/components/ui/DateTime";
 import { cn } from "@/lib/cn";
+import type { Evaluation } from "@/lib/domain";
+import { QUESTION_STRENGTH_LABEL } from "@/lib/domain";
+import { listEvaluations } from "@/lib/evaluation-api";
 import { formatCount } from "@/lib/format";
 import { SCORE_BAR_CLASS, scoreLevel, scorePercent } from "@/lib/score";
-import { MOCK_APPLICATIONS } from "@/mocks/applications";
-import { MOCK_EVALUATIONS } from "@/mocks/evaluations";
-import type { Evaluation } from "@/mocks/types";
-import { QUESTION_STRENGTH_LABEL } from "@/mocks/types";
 
 const COLUMNS = "grid-cols-[180px_1fr_110px_320px_90px]";
 
 /** 絞り込みの選択肢。すべて / 企業ごと / チュートリアル（S-16 4章） */
-type FilterKey = "all" | "tutorial" | `company-${number}`;
+type FilterKey = "all" | "tutorial" | `company:${string}`;
 
 function filterKeyOf(evaluation: Evaluation): FilterKey {
-  return evaluation.company_id === null
+  return evaluation.company_name === null
     ? "tutorial"
-    : `company-${evaluation.company_id}`;
+    : `company:${evaluation.company_name}`;
 }
 
 /** 項目別スコアの3本のバー。数値は出さない（S-16 5章） */
@@ -32,7 +31,7 @@ function ScoreBars({ evaluation }: { evaluation: Evaluation }) {
   if (!scores) return null;
 
   const values = [
-    scores.speaking_speed.score,
+    scores.speaking_speed?.score ?? null,
     scores.filler.score,
     scores.structure_content.score,
   ];
@@ -41,10 +40,12 @@ function ScoreBars({ evaluation }: { evaluation: Evaluation }) {
     <div className="flex items-center gap-2">
       {values.map((score, index) => (
         <div key={index} className="h-1.5 flex-1 rounded-chip bg-track">
-          <div
-            className={cn("h-1.5 rounded-chip", SCORE_BAR_CLASS[scoreLevel(score)])}
-            style={{ width: `${scorePercent(score)}%` }}
-          />
+          {score !== null && (
+            <div
+              className={cn("h-1.5 rounded-chip", SCORE_BAR_CLASS[scoreLevel(score)])}
+              style={{ width: `${scorePercent(score)}%` }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -71,41 +72,54 @@ function TotalScoreCell({ evaluation }: { evaluation: Evaluation }) {
 export default function EvaluationsPage() {
   const [newestFirst, setNewestFirst] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const total = MOCK_EVALUATIONS.length;
+  useEffect(() => {
+    const controller = new AbortController();
+    listEvaluations(controller.signal)
+      .then((loaded) => {
+        setEvaluations(loaded);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setError("評価履歴を取得できませんでした。時間をおいて再読み込みしてください。");
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  const total = evaluations.length;
 
   // 結果が1件以上ある企業だけを選択肢に出す（S-16 4章）
   const companyOptions = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const evaluation of MOCK_EVALUATIONS) {
-      if (evaluation.company_id === null) continue;
+    const counts = new Map<string, number>();
+    for (const evaluation of evaluations) {
+      if (evaluation.company_name === null) continue;
       counts.set(
-        evaluation.company_id,
-        (counts.get(evaluation.company_id) ?? 0) + 1,
+        evaluation.company_name,
+        (counts.get(evaluation.company_name) ?? 0) + 1,
       );
     }
-    return [...counts.entries()].map(([companyId, count]) => {
-      const application = MOCK_APPLICATIONS.find(
-        (candidate) => candidate.id === companyId,
-      );
-      return {
-        key: `company-${companyId}` as FilterKey,
-        // 削除済みの企業の結果も残る（S-16 4章）
-        label: application?.company_name ?? "（削除済みの企業）",
-        count,
-      };
-    });
-  }, []);
+    return [...counts.entries()].map(([companyName, count]) => ({
+      key: `company:${companyName}` as FilterKey,
+      label: companyName,
+      count,
+    }));
+  }, [evaluations]);
 
-  const tutorialCount = MOCK_EVALUATIONS.filter(
-    (evaluation) => evaluation.company_id === null,
+  const tutorialCount = evaluations.filter(
+    (evaluation) => evaluation.company_name === null,
   ).length;
 
   const rows = useMemo(() => {
     const filtered =
       filter === "all"
-        ? [...MOCK_EVALUATIONS]
-        : MOCK_EVALUATIONS.filter(
+        ? [...evaluations]
+        : evaluations.filter(
             (evaluation) => filterKeyOf(evaluation) === filter,
           );
     // 実施日時で並べる。ページ送りは持たず全件を縦に並べる（S-16 3章）
@@ -114,7 +128,25 @@ export default function EvaluationsPage() {
         ? b.created_at.localeCompare(a.created_at)
         : a.created_at.localeCompare(b.created_at),
     );
-  }, [filter, newestFirst]);
+  }, [evaluations, filter, newestFirst]);
+
+  if (loading) {
+    return (
+      <PageContainer width={1080} className="text-body-sm text-ink-sub">
+        評価履歴を読み込んでいます。
+      </PageContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageContainer width={1080}>
+        <p role="alert" className="rounded-control border border-danger/30 bg-danger/5 px-4 py-3 text-body-sm text-danger">
+          {error}
+        </p>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer width={1080} className="flex flex-col gap-5">
@@ -195,7 +227,7 @@ export default function EvaluationsPage() {
           {rows.map((evaluation) => (
             <Link
               key={evaluation.evaluation_id}
-              href={`/evaluations/${evaluation.evaluation_id}`}
+              href={`/evaluations/detail?id=${evaluation.evaluation_id}`}
               className={`grid ${COLUMNS} items-center border-b border-divider px-6 py-4 text-body-sm last:border-b-0 hover:bg-accent-soft`}
             >
               <DateTime
@@ -206,13 +238,13 @@ export default function EvaluationsPage() {
                 <span
                   className={cn(
                     "font-medium",
-                    evaluation.company_id === null && "text-ink-sub",
+                    evaluation.company_name === null && "text-ink-sub",
                   )}
                 >
                   {evaluation.company_name ?? "（企業なし）"}
                 </span>
                 <span className="text-note text-ink-muted">
-                  {evaluation.company_id === null
+                  {evaluation.company_name === null
                     ? "チュートリアル"
                     : `本番モード / 強度 ${
                         evaluation.question_strength

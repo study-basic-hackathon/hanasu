@@ -42,6 +42,7 @@ terraform apply
 - `ecs_cluster_name` / `ecs_service_name` … ECS操作時に使う名前
 - `amplify_app_id` / `amplify_app_url` / `amplify_branch_url` … Amplify の直接配備・公開先に使う値
 - `github_actions_amplify_deploy_role_arn` … GitHub Actions が Amplify 配備専用に引き受ける OIDC ロール
+- `github_actions_backend_deploy_role_arn` … GitHub Actions がバックエンドの ECR/ECS 配備専用に引き受ける OIDC ロール
 - `api_cloudfront_url` … フロントエンドの `NEXT_PUBLIC_API_BASE_URL` に指定する HTTPS の API URL
 
 > **注意**: `apply`直後はECSサービスがECRリポジトリ内の`:latest`イメージを起動しようとしますが、初回はイメージが存在しないためタスクが起動失敗を繰り返します。次の手順でイメージをpushしてください。
@@ -78,6 +79,47 @@ docker push "$ECR_REPO:latest"
 
 `backend/`はコンテナ起動時に`alembic upgrade head`→`uvicorn`起動の順に実行する。DB接続情報は`DATABASE_URL`(Secrets Manager経由)で渡している。動作確認は`curl $(terraform output -raw api_cloudfront_url)/health`で行う(`api_cloudfront_url`は`https://`込みの値なので先頭に重ねて付けない)。
 
+## GitHub Actionsによるbackend手動配備の初期設定
+
+Terraform apply 後、リポジトリの GitHub Actions Variables に以下を設定する。値はすべて `terraform output` から取得でき、GitHub Secrets に長期 AWS アクセスキーを保存しない。
+
+| Variable | 値 |
+|---|---|
+| `AWS_REGION` | `ap-northeast-1` |
+| `AWS_BACKEND_ROLE_TO_ASSUME` | `terraform output -raw github_actions_backend_deploy_role_arn` |
+| `ECR_REPOSITORY_URL` | `terraform output -raw ecr_repository_url` |
+| `ECS_CLUSTER_NAME` | `terraform output -raw ecs_cluster_name` |
+| `ECS_SERVICE_NAME` | `terraform output -raw ecs_service_name` |
+| `BACKEND_API_BASE_URL` | `terraform output -raw api_cloudfront_url` |
+
+`AWS_BACKEND_ROLE_TO_ASSUME` のロールは `study-basic-hackathon/hanasu` の `main` ブランチの OIDC token だけを信頼する。ECR認証と対象リポジトリへのイメージpush、および対象ECSサービスの `UpdateService` / `DescribeServices` だけを許可し、Terraform の `plan` / `apply` / `destroy` 権限は付与しない。
+
+手動配備は GitHub の **Actions > Deploy backend to Amazon ECS > Run workflow** から `main` ブランチを選択して実行する。push や pull request を契機とした自動実行は行わず、`main` 以外を選択すると設定検証で停止する。ワークフローは次の順序で処理する。
+
+1. backendの単体テストを実行する
+2. `backend/Dockerfile` から `--provenance=false --sbom=false` でイメージをbuildする
+3. ECRへ `:latest` としてpushする
+4. ECSサービスを `--force-new-deployment` で更新し、安定化を待つ
+5. CloudFront経由の `/health` が成功することを確認する
+
+このワークフローは本書の手順2〜4を自動化する。ローカルのコマンドは初回イメージpushや障害時の手動復旧手段として引き続き利用できる。同時実行は抑止され、実行結果、commit SHA、image URI、ECS cluster/service、各処理の成否は GitHub Actions の job summary に記録される。
+
+### backend配備が失敗した場合
+
+| 失敗箇所 | 確認事項 |
+|---|---|
+| 設定検証 | 6個の GitHub Actions Variables が設定済みか、`main` ブランチを選択したかを確認する |
+| AWS認証 | `github_actions_backend_deploy_role_arn` を反映する Terraform apply が完了しているか、OIDCロールARNを正しく設定したかを確認する |
+| ECR push | `ECR_REPOSITORY_URL` がタグなしの正しいURLか、対象ECRリポジトリが存在するかを確認する |
+| ECS安定化待ち | ECSサービスの Events、停止タスクの理由、CloudWatch Logs の `/ecs/hanasu-dev-api` を確認する |
+| `/health` | `BACKEND_API_BASE_URL` が `api_cloudfront_url` と一致するか、CloudFront・ALB・target groupの状態を確認する |
+
+ワークフローがECRへのpush後に失敗した場合でも、ECSサービスが正常に安定していることを確認するまでは配備完了とみなさない。ECSのログ確認には次のコマンドを利用できる。
+
+```bash
+aws logs tail /ecs/hanasu-dev-api --since 30m --follow
+```
+
 ## GitHub ActionsによるAmplify直接配備の初期設定
 
 Terraform apply 後、リポジトリの GitHub Actions Variables に以下を設定する。値はすべて `terraform output` から取得でき、GitHub Secrets に長期 AWS アクセスキーを保存しない。
@@ -90,9 +132,9 @@ Terraform apply 後、リポジトリの GitHub Actions Variables に以下を�
 | `AMPLIFY_BRANCH_NAME` | `main`（`terraform.tfvars` の `amplify_branch_name`） |
 | `NEXT_PUBLIC_API_BASE_URL` | `terraform output -raw api_cloudfront_url` |
 
-ロールは `study-basic-hackathon/hanasu` の `main` ブランチの OIDC token だけを信頼し、`CreateDeployment`、`StartDeployment`、`GetJob`、`GetBranch` だけを Amplify branch に許可する。Terraform の `plan` / `apply` / `destroy` 権限は付与しない。
+ロールは immutable ID を含む `study-basic-hackathon@212195036/hanasu@1319873544` の `main` ブランチの OIDC token だけを信頼し、`CreateDeployment`、`StartDeployment`、`GetJob`、`GetBranch` だけを Amplify branch に許可する。Terraform の `plan` / `apply` / `destroy` 権限は付与しない。
 
-Next.js の静的出力と、`out/` の中身を ZIP 化して Amplify へ直接配備する GitHub Actions workflow は #19 の担当範囲であり、このディレクトリでは管理しない。配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0017 で受容した HTTP 区間である。
+Next.js の静的出力と、`out/` の中身を ZIP 化して Amplify へ直接配備する GitHub Actions workflow は #19 の担当範囲であり、このディレクトリでは管理しない。配備後は `amplify_branch_url` がフロントエンドの公開 URL になる。CloudFront は HTTPS を受け付け、ALB への転送は ADR-0019 で受容した HTTP 区間である。
 
 ## 3. ECSに最新イメージを反映
 

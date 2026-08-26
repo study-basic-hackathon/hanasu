@@ -14,6 +14,8 @@ class CompanyCreate(BaseModel):
     resume: str | None = None
     # 企業URL（任意・http(s) の正しいURLのみ受け付ける）
     company_url: HttpUrl | None = None
+    # 募集要項の要約（任意）
+    job_summary: str | None = None
     # 備考（任意）
     note: str | None = None
 
@@ -24,5 +26,6 @@ class CompanyOut(BaseModel):
     motivation: str | None = None
     resume: str | None = None
     company_url: str | None = None
+    job_summary: str | None = None
     note: str | None = None
     created_at: datetime

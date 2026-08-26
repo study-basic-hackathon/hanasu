@@ -22,6 +22,8 @@ class Company(Base):
     resume = Column(Text, nullable=True)
     # 企業URL（任意）
     company_url = Column(String, nullable=True)
+    # 募集要項の要約（任意）
+    job_summary = Column(Text, nullable=True)
     # 備考（任意）
     note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

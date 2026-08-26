@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import type { ChatTurn } from "@/mocks/conversation";
+import type { ChatTurn } from "@/lib/domain";
+import { synthesizeSpeech } from "@/lib/interview-api";
 
 /**
  * 会話ログの1件（S-08 5章）。
@@ -46,7 +47,7 @@ export function ChatMessage({ turn }: { turn: ChatTurn }) {
           ) : (
             <>
               {turn.time && <span>{turn.time}</span>}
-              <SpeakButton />
+              <SpeakButton text={turn.content} />
             </>
           )}
         </div>
@@ -82,19 +83,66 @@ function Avatar({ label, muted }: { label: string; muted?: boolean }) {
 }
 
 /**
- * 「読み上げる」（S-08 5.1）。
- * 音声化は POST /interviews/tts を作ってから繋ぐため、ここでは表示の切り替えだけを持つ。
+ * 「読み上げる」（S-08 5.1）。POST /interviews/tts の音声を再生する。
  */
-function SpeakButton() {
-  const [speaking, setSpeaking] = useState(false);
+function SpeakButton({ text }: { text: string }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  function release() {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    objectUrlRef.current = null;
+  }
+
+  useEffect(() => release, []);
+
+  async function toggleSpeech() {
+    if (status === "playing") {
+      release();
+      setStatus("idle");
+      return;
+    }
+
+    setStatus("loading");
+    try {
+      const blob = await synthesizeSpeech(text);
+      const objectUrl = URL.createObjectURL(blob);
+      const audio = new Audio(objectUrl);
+      objectUrlRef.current = objectUrl;
+      audioRef.current = audio;
+      audio.addEventListener("ended", () => {
+        release();
+        setStatus("idle");
+      });
+      audio.addEventListener("error", () => {
+        release();
+        setStatus("error");
+      });
+      await audio.play();
+      setStatus("playing");
+    } catch {
+      release();
+      setStatus("error");
+    }
+  }
 
   return (
     <button
       type="button"
-      onClick={() => setSpeaking((current) => !current)}
-      className="text-accent hover:underline"
+      disabled={status === "loading"}
+      onClick={toggleSpeech}
+      className="text-accent hover:underline disabled:opacity-50"
     >
-      {speaking ? "停止する" : "読み上げる"}
+      {status === "loading"
+        ? "音声を準備しています"
+        : status === "playing"
+          ? "停止する"
+          : status === "error"
+            ? "再試行する"
+            : "読み上げる"}
     </button>
   );
 }

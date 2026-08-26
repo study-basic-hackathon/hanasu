@@ -8,20 +8,25 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextArea, TextField } from "@/components/ui/TextField";
-import type { Application } from "@/mocks/types";
+import { ApiError } from "@/lib/api-client";
+import {
+  createCompany,
+  updateCompany,
+  type Company,
+} from "@/lib/company-api";
 
 import { resolveReturnTo } from "./returnTo";
 
 type ApplicationFormProps = {
   /** 編集のときだけ渡す。無ければ新規登録 */
-  application?: Application;
+  company?: Company;
   /** 呼び出し元（S-05 または S-06）へ戻るためのパス */
   returnTo: string;
 };
 
 type ReturnAwareApplicationFormProps = Pick<
   ApplicationFormProps,
-  "application"
+  "company"
 >;
 
 type FormValues = {
@@ -48,21 +53,17 @@ const OPTIONAL_FIELDS: { key: keyof FormValues; label: string }[] = [
   { key: "note", label: "備考" },
 ];
 
-function toFormValues(application?: Application): FormValues {
+function toFormValues(company?: Company): FormValues {
   return {
-    company_name: application?.company_name ?? "",
-    posting_url: application?.posting_url ?? "",
-    job_title: application?.job_title ?? "",
-    documents: application?.documents ?? "",
-    motivation: application?.motivation ?? "",
-    current_position: application?.current_position ?? "",
-    experience_years:
-      application?.experience_years === null ||
-      application?.experience_years === undefined
-        ? ""
-        : String(application.experience_years),
-    resume: application?.resume ?? "",
-    note: application?.note ?? "",
+    company_name: company?.company_name ?? "",
+    posting_url: company?.company_url ?? "",
+    job_title: "",
+    documents: "",
+    motivation: company?.motivation ?? "",
+    current_position: "",
+    experience_years: "",
+    resume: company?.resume ?? "",
+    note: company?.note ?? "",
   };
 }
 
@@ -70,13 +71,13 @@ function toFormValues(application?: Application): FormValues {
  * 静的出力後も `?from=` をブラウザで解決し、呼び出し元への戻り先を維持する。
  */
 export function ReturnAwareApplicationForm({
-  application,
+  company,
 }: ReturnAwareApplicationFormProps) {
   const searchParams = useSearchParams();
 
   return (
     <ApplicationForm
-      application={application}
+      company={company}
       returnTo={resolveReturnTo(searchParams.get("from") ?? undefined)}
     />
   );
@@ -86,18 +87,20 @@ type Errors = Partial<Record<keyof FormValues, string>>;
 
 /**
  * S-07 応募企業情報 登録 / 編集。登録と編集で同じ画面を使う。
- * モックでは保存の API を呼ばず、検査を通ったら呼び出し元へ戻るだけ。
+ * 現在のバックエンドが受け付ける項目を保存し、成功後に呼び出し元へ戻る。
  */
 export function ApplicationForm({
-  application,
+  company,
   returnTo,
 }: ApplicationFormProps) {
   const router = useRouter();
-  const isEdit = application !== undefined;
+  const isEdit = company !== undefined;
   const [values, setValues] = useState<FormValues>(() =>
-    toFormValues(application),
+    toFormValues(company),
   );
   const [errors, setErrors] = useState<Errors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   function update(key: keyof FormValues, value: string) {
@@ -115,12 +118,16 @@ export function ApplicationForm({
   ).map(({ label }) => label);
 
   // 企業名が空のあいだは「保存する」を押せなくする（S-07 5章）
-  const canSave = values.company_name.trim() !== "";
+  const canSave =
+    values.company_name.trim() !== "" && values.motivation.trim() !== "";
 
   function validate(): Errors {
     const next: Errors = {};
     if (values.company_name.trim() === "") {
       next.company_name = "企業名を入力してください。";
+    }
+    if (values.motivation.trim() === "") {
+      next.motivation = "志望動機を入力してください。";
     }
     const url = values.posting_url.trim();
     if (url !== "" && !/^https?:\/\//.test(url)) {
@@ -134,8 +141,9 @@ export function ApplicationForm({
     return next;
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -146,7 +154,32 @@ export function ApplicationForm({
         ?.scrollIntoView({ block: "center" });
       return;
     }
-    router.push(returnTo);
+
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const input = {
+        company_name: values.company_name.trim(),
+        motivation: values.motivation.trim(),
+        company_url: values.posting_url.trim() || null,
+        resume: values.resume.trim() || null,
+        note: values.note.trim() || null,
+      };
+      if (company) await updateCompany(company.id, input);
+      else await createCompany(input);
+      router.push(returnTo);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setErrors((current) => ({
+          ...current,
+          company_name: "この企業名はすでに登録されています。",
+        }));
+      } else {
+        setSubmitError("保存できませんでした。時間をおいてもう一度お試しください。");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -193,6 +226,8 @@ export function ApplicationForm({
               <TextField
                 label="職種"
                 name="job_title"
+                disabled
+                hint="API の項目定義（#17）確定後に保存へ対応します。"
                 value={values.job_title}
                 onChange={(event) => update("job_title", event.target.value)}
               />
@@ -200,6 +235,7 @@ export function ApplicationForm({
             <TextArea
               label="応募書類（貼り付け）"
               name="documents"
+              disabled
               rows={5}
               placeholder="職務経歴書の本文をそのまま貼り付けてください。面接官の質問に反映されます。"
               value={values.documents}
@@ -208,6 +244,8 @@ export function ApplicationForm({
             <TextArea
               label="志望動機"
               name="motivation"
+              required
+              error={errors.motivation}
               rows={5}
               value={values.motivation}
               onChange={(event) => update("motivation", event.target.value)}
@@ -225,6 +263,7 @@ export function ApplicationForm({
               <TextField
                 label="現職 / 直近の所属"
                 name="current_position"
+                disabled
                 value={values.current_position}
                 onChange={(event) =>
                   update("current_position", event.target.value)
@@ -233,6 +272,7 @@ export function ApplicationForm({
               <TextField
                 label="経験年数"
                 name="experience_years"
+                disabled
                 inputMode="numeric"
                 suffix="年"
                 error={errors.experience_years}
@@ -260,6 +300,11 @@ export function ApplicationForm({
           </Card>
 
           <div className="flex justify-end gap-3">
+            {submitError && (
+              <p role="alert" className="mr-auto self-center text-note text-danger">
+                {submitError}
+              </p>
+            )}
             {/* 入力の途中でも確認を出さない（S-07 6章） */}
             <Link
               href={returnTo}
@@ -267,8 +312,8 @@ export function ApplicationForm({
             >
               取り消す
             </Link>
-            <Button type="submit" disabled={!canSave} className="px-8">
-              保存する
+            <Button type="submit" disabled={!canSave || submitting} className="px-8">
+              {submitting ? "保存しています" : "保存する"}
             </Button>
           </div>
         </form>

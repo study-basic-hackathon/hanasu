@@ -1,37 +1,52 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AnswerPanel } from "@/components/interview/AnswerPanel";
+import {
+  AnswerPanel,
+  type AnswerDetail,
+} from "@/components/interview/AnswerPanel";
 import { ChatMessage, ThinkingMessage } from "@/components/interview/ChatMessage";
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
+import { getCompany } from "@/lib/company-api";
+import type {
+  AnswerMethod,
+  ChatTurn,
+  QuestionStrength,
+} from "@/lib/domain";
+import { createEvaluation } from "@/lib/evaluation-api";
+import { buildEvaluationScores } from "@/lib/evaluation-score";
+import { storeEvaluationSession } from "@/lib/evaluation-session";
+import {
+  ANSWER_METHOD_LABEL,
+  QUESTION_STRENGTH_LABEL,
+} from "@/lib/domain";
 import {
   countFillers,
+  FIRST_QUESTION,
   MAX_TURNS,
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
 } from "@/lib/interview";
-import { MOCK_APPLICATIONS } from "@/mocks/applications";
-import type { ChatTurn } from "@/mocks/conversation";
-import {
-  MOCK_INTERVIEW_TURNS,
-  MOCK_NEXT_QUESTIONS,
-} from "@/mocks/conversation";
-import { MOCK_PENDING_EVALUATION_ID } from "@/mocks/evaluations";
-import type { AnswerMethod, QuestionStrength } from "@/mocks/types";
-import { ANSWER_METHOD_LABEL, QUESTION_STRENGTH_LABEL } from "@/mocks/types";
+import { requestNextQuestion } from "@/lib/interview-api";
 
 /** S-08 本番モードと、それを流用する S-03 チュートリアル（S-08 9章） */
 export type InterviewMode = "interview" | "tutorial";
 
-/** 実施条件は S-05 から引き渡される。モックでは見本の値を置く */
-const MOCK_COMPANY_NAME = MOCK_APPLICATIONS[0]?.company_name ?? "";
-const MOCK_QUESTION_STRENGTH: QuestionStrength = "standard";
+function questionStrengthOf(value: string | null): QuestionStrength | null {
+  return value === "easy" || value === "standard" || value === "hard"
+    ? value
+    : null;
+}
+
+function answerMethodOf(value: string | null): AnswerMethod | null {
+  return value === "voice" || value === "text" ? value : null;
+}
 
 function nowClock(): string {
   const now = new Date();
@@ -40,18 +55,46 @@ function nowClock(): string {
 
 export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isTutorial = mode === "tutorial";
   const maxTurns = isTutorial ? TUTORIAL_MAX_TURNS : MAX_TURNS;
+  const configuredCompanyId = Number(searchParams.get("companyId"));
+  const companyId =
+    !isTutorial && Number.isSafeInteger(configuredCompanyId) && configuredCompanyId > 0
+      ? configuredCompanyId
+      : null;
+  const questionStrength =
+    questionStrengthOf(searchParams.get("strength")) ?? "standard";
+  const configuredAnswerMethod =
+    answerMethodOf(searchParams.get("answerMethod")) ?? "voice";
 
   const [turns, setTurns] = useState<ChatTurn[]>(() =>
     isTutorial
       ? [{ role: "assistant", content: TUTORIAL_QUESTION }]
-      : MOCK_INTERVIEW_TURNS,
+      : [{ role: "assistant", content: FIRST_QUESTION }],
   );
-  const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
+  const [answerMethod, setAnswerMethod] = useState<AnswerMethod>(
+    configuredAnswerMethod,
+  );
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isTutorial || companyId === null) return;
+    const controller = new AbortController();
+    getCompany(companyId, controller.signal)
+      .then((company) => setCompanyName(company.company_name))
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setApiError("対象企業の情報を取得できませんでした。設定画面から選び直してください。");
+        }
+      });
+    return () => controller.abort();
+  }, [companyId, isTutorial]);
 
   const answeredTurns = turns.filter((turn) => turn.role === "user").length;
   // 回答を送るまでは、いま答えようとしているターンの番号（S-08 4章）
@@ -75,49 +118,109 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
    * 評価を実行して S-14 へ移る。待ち合わせは S-14 が行う（S-08 7章）。
    * `from=interview` は、失敗したときに「評価をやり直す」を出せる場合の目印
    */
-  const goToEvaluation = useCallback(() => {
-    router.push(`/evaluations/${MOCK_PENDING_EVALUATION_ID}?from=interview`);
-  }, [router]);
+  const goToEvaluation = useCallback(
+    async (evaluationTurns: ChatTurn[] = turns) => {
+      if (evaluating) return;
+      setConfirmingEnd(false);
+      setEvaluating(true);
+      setApiError(null);
+
+      try {
+        const input = {
+          companyId,
+          questionStrength: isTutorial ? null : questionStrength,
+          answerMethod,
+          turns: evaluationTurns,
+          scores: buildEvaluationScores(evaluationTurns),
+        };
+        const evaluationId = await createEvaluation(input);
+        storeEvaluationSession(evaluationId, {
+          ...input,
+          companyName,
+        });
+        router.push(
+          `/evaluations/detail?id=${evaluationId}&from=interview`,
+        );
+      } catch {
+        setApiError(
+          "評価を開始できませんでした。時間をおいてもう一度お試しください。",
+        );
+        setEvaluating(false);
+      }
+    }, [
+      answerMethod,
+      companyId,
+      companyName,
+      evaluating,
+      isTutorial,
+      questionStrength,
+      router,
+      turns,
+    ],
+  );
 
   const handleSubmit = useCallback(
     (
       content: string,
-      detail?: { audioSeconds: number; fillerCount: number },
+      detail?: AnswerDetail,
     ) => {
       const answer: ChatTurn = {
         role: "user",
         content,
+        raw_content: detail?.rawContent,
         time: nowClock(),
         audio_seconds: detail?.audioSeconds,
+        audio_duration_ms: detail?.audioDurationMs,
+        character_count: detail?.characterCount,
         filler_count: detail?.fillerCount ?? countFillers(content),
+        chars_per_min: detail?.charsPerMin,
       };
-      setTurns((current) => [...current, answer]);
+      const nextTurns = [...turns, answer];
+      setTurns(nextTurns);
+      setApiError(null);
 
       // 上限に達したら確認を出さずに評価へ進む（S-08 4章 / 9章）
       if (answeredTurns + 1 >= maxTurns) {
-        goToEvaluation();
+        void goToEvaluation(nextTurns);
         return;
       }
+      if (companyId === null) return;
+
       setWaiting(true);
+      requestNextQuestion({
+        companyId,
+        questionStrength,
+        history: nextTurns,
+      })
+        .then((nextQuestion) => {
+          setTurns((current) => [
+            ...current,
+            { role: "assistant", content: nextQuestion, time: nowClock() },
+          ]);
+          setWaiting(false);
+        })
+        .catch(() => {
+          setWaiting(false);
+          setApiError("次の質問を取得できませんでした。回答をもう一度送信してください。");
+        });
     },
-    [answeredTurns, maxTurns, goToEvaluation],
+    [
+      answeredTurns,
+      companyId,
+      goToEvaluation,
+      maxTurns,
+      questionStrength,
+      turns,
+    ],
   );
 
-  // 面接官の応答待ち。モックでは POST /interviews/chat を呼ばず、見本の質問を順に出す
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = setTimeout(() => {
-      const nextQuestion =
-        MOCK_NEXT_QUESTIONS[(answeredTurns - 1) % MOCK_NEXT_QUESTIONS.length];
-      setTurns((current) => [
-        ...current,
-        { role: "assistant", content: nextQuestion, time: nowClock() },
-      ]);
-      setWaiting(false);
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [waiting, answeredTurns]);
+  if (!isTutorial && companyId === null) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-body-sm text-danger">
+        対象企業が指定されていません。練習の設定から開始してください。
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh flex-col">
@@ -134,11 +237,11 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
             <Button
               variant="danger"
               size="xs"
-              disabled={!canEnd}
+              disabled={!canEnd || evaluating}
               onClick={() => setConfirmingEnd(true)}
               className="font-medium"
             >
-              面接を終える
+              {evaluating ? "評価を開始しています" : "面接を終える"}
             </Button>
           </div>
         }
@@ -157,10 +260,10 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
                 tone="accent"
                 className="px-2.5 py-[5px] text-label font-medium"
               >
-                {MOCK_COMPANY_NAME}
+                {companyName ?? "企業情報を読み込んでいます"}
               </Chip>
               <Chip tone="muted" className="px-2.5 py-[5px] text-label">
-                質問の強度：{QUESTION_STRENGTH_LABEL[MOCK_QUESTION_STRENGTH]}
+                質問の強度：{QUESTION_STRENGTH_LABEL[questionStrength]}
               </Chip>
             </>
           )}
@@ -199,11 +302,16 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
 
       <div className="flex-none border-t border-line bg-surface pt-5 pb-6">
         <div className="mx-auto flex w-[880px] flex-col gap-3.5">
+          {apiError && (
+            <p role="alert" className="rounded-control border border-danger/30 bg-danger/5 px-3 py-2 text-note text-danger">
+              {apiError}
+            </p>
+          )}
           <AnswerPanel
             answerMethod={answerMethod}
             onChangeAnswerMethod={setAnswerMethod}
             onSubmit={handleSubmit}
-            waiting={waiting}
+            waiting={waiting || evaluating}
           />
           <p className="text-note text-ink-muted">
             この画面を離れると会話は失われます。評価は「面接を終える」を押したあとに行われます。
@@ -216,7 +324,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         message="評価に進みます。この会話には戻れません。"
         confirmLabel="評価に進む"
         confirmVariant="primary"
-        onConfirm={goToEvaluation}
+        onConfirm={() => void goToEvaluation()}
         onCancel={() => setConfirmingEnd(false)}
       />
     </div>
