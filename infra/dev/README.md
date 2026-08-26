@@ -53,10 +53,18 @@ ECSタスク定義は常にリポジトリ直下の `backend/`(本実装)を動�
 
 `aws_secretsmanager_secret.amivoice_api_key`はTerraformでは入れ物だけを作る(値は外部で発行済みのため、stateに平文で残さないようTerraformでは持たせない)。`apply`後、値を1回だけCLIで投入する。
 
+`--secret-string`にキーを直接書くとシェル履歴やプロセス引数(`ps`)に残るため、権限を絞った一時ファイル経由(`file://`)で渡し、投入後すぐに削除する。
+
 ```bash
+SECRET_FILE=$(mktemp)
+chmod 600 "$SECRET_FILE"
+echo -n "実際のAPIキー" > "$SECRET_FILE"
+
 aws secretsmanager put-secret-value \
   --secret-id "$(terraform output -raw amivoice_api_key_secret_arn)" \
-  --secret-string "実際のAPIキー"
+  --secret-string "file://$SECRET_FILE"
+
+rm -f "$SECRET_FILE"
 ```
 
 キーをローテーションする場合も同じコマンドを再実行するだけでよい(ECSタスクは再起動時に最新の値を取得する)。
