@@ -32,8 +32,9 @@ def _build_system_prompt(company: models.Company, intensity: str, max_turns: int
         "会話履歴が空の場合は、自己紹介と志望動機を尋ねる最初の質問をしてください。",
     ]
     if max_turns is not None:
-        remaining = max(max_turns - current_turn + 1, 1)
-        parts.append(f"面接はあと最大{remaining}問で終わりです（上限{max_turns}ターン中、今は{min(current_turn, max_turns)}ターン目）。残りが少ないほど、面接を締めくくる質問に向かってください。")
+        # current_turn <= max_turns はスキーマ側で保証済み
+        remaining = max_turns - current_turn + 1
+        parts.append(f"面接はあと最大{remaining}問で終わりです（上限{max_turns}ターン中、今は{current_turn}ターン目）。残りが少ないほど、面接を締めくくる質問に向かってください。")
     return "\n".join(parts)
 
 
