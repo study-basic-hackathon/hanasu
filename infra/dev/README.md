@@ -49,6 +49,33 @@ terraform apply
 
 ECSタスク定義は常にリポジトリ直下の `backend/`(本実装)を動かす。`bedrock:InvokeModel`権限を持つECSタスクロール(`aws_iam_role.ecs_task`)がタスクに割り当てられ(Bedrock呼び出し用)、RDSのマスターパスワードから組み立てた`DATABASE_URL`と`JWT_SECRET_KEY`をSecrets Manager経由で注入する(`infra/dev/secrets.tf`)。
 
+### AmiVoice(文字起こし)のAPIキー投入
+
+`aws_secretsmanager_secret.amivoice_api_key`はTerraformでは入れ物だけを作る(値は外部で発行済みのため、stateに平文で残さないようTerraformでは持たせない)。`apply`後、値を1回だけCLIで投入する。
+
+`--secret-string`にキーを直接書くとシェル履歴やプロセス引数(`ps`)に残るため、権限を絞った一時ファイル経由(`file://`)で渡し、投入後すぐに削除する。
+
+```bash
+SECRET_FILE=$(mktemp)
+chmod 600 "$SECRET_FILE"
+echo -n "実際のAPIキー" > "$SECRET_FILE"
+
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw amivoice_api_key_secret_arn)" \
+  --secret-string "file://$SECRET_FILE"
+
+rm -f "$SECRET_FILE"
+```
+
+キーをローテーションする場合、`put-secret-value`だけでは**稼働中のタスクには反映されない**(Secrets Managerの値はコンテナ起動時に一度読むだけで、動いている間は見に行かない)。値を更新したら、3節と同じ`--force-new-deployment`で新しいタスクに置き換える必要がある。
+
+```bash
+aws ecs update-service \
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --service "$(terraform output -raw ecs_service_name)" \
+  --force-new-deployment
+```
+
 ## 2. コンテナイメージのビルド & ECRへpush
 
 ECRへのログインは認証トークン発行後12時間有効です。トークンが切れていない限り、この手順は毎回不要です。

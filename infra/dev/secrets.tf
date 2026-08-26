@@ -18,3 +18,11 @@ resource "aws_secretsmanager_secret_version" "jwt_secret_key" {
   secret_id     = aws_secretsmanager_secret.jwt_secret_key.id
   secret_string = random_password.jwt_secret_key.result
 }
+
+# AmiVoiceのAPIキーは外部で発行済みの値であり、Terraformでは生成しない。
+# 値をこの資材(secret_string)に持たせるとstateに平文で残ってしまうため、
+# シークレットの入れ物だけをここで作り、値は apply 後に手動で
+# `aws secretsmanager put-secret-value` で投入する(infra/dev/README.md参照)。
+resource "aws_secretsmanager_secret" "amivoice_api_key" {
+  name = "${local.name_prefix}-amivoice-api-key"
+}

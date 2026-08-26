@@ -1,15 +1,34 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
 from app.routers import auth
-from app.schemas.interview import ChatRequest, ChatResponse, TtsRequest
-from app.services import llm, tts
+from app.schemas.interview import ChatRequest, ChatResponse, SttResponse, TtsRequest
+from app.services import llm, stt, tts
 
 router = APIRouter()
+
+# ECSタスクのメモリ(512MiB)を使い切らないための上限。数分の発話でも十分に収まる値
+_MAX_AUDIO_BYTES = 20 * 1024 * 1024
+
+
+def _read_audio_or_413(audio: UploadFile) -> bytes:
+    """音声を上限付きでチャンク読み込みする。超過時は413（読み込み途中で打ち切るため全量はメモリに載らない）。"""
+    chunks = bytearray()
+    while True:
+        chunk = audio.file.read(1024 * 1024)
+        if not chunk:
+            break
+        chunks += chunk
+        if len(chunks) > _MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"音声ファイルが大きすぎます（上限{_MAX_AUDIO_BYTES // (1024 * 1024)}MiB）",
+            )
+    return bytes(chunks)
 
 
 _INTENSITY_GUIDE = {
@@ -63,6 +82,24 @@ def chat(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
     return ChatResponse(text=text)
+
+
+@router.post("/interviews/stt", response_model=SttResponse, summary="文字起こし")
+def transcribe(
+    current_user: Annotated[models.User, Depends(auth.get_current_user)],
+    audio: Annotated[UploadFile, File()],
+):
+    """録音音声を文字起こしし、フィラー数・話速指標まで算出して返す。
+
+    音声はここで処理するだけで保存しない（ADR-0007）。
+    """
+    audio_bytes = _read_audio_or_413(audio)
+    try:
+        result = stt.transcribe(audio_bytes, audio.filename or "audio.webm")
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+
+    return SttResponse(**result)
 
 
 @router.post("/interviews/tts", summary="面接官の発言を音声化する")
