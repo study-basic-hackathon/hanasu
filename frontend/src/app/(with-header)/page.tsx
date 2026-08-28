@@ -76,6 +76,7 @@ function ScoreRow({
 function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
   const scores = evaluation.scores;
   if (!scores || evaluation.total_score === null) return null;
+  const filler = scores.filler;
 
   return (
     <Card className="flex flex-col gap-[22px] px-7 py-[26px]">
@@ -102,10 +103,12 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
           />
           <ScoreRow
             label="フィラーの数"
-            score={scores.filler?.score ?? null}
+            score={
+              filler?.value_per_minute !== undefined ? filler.score : null
+            }
             measured={
-              scores.filler
-                ? formatFiller(scores.filler.value)
+              filler?.value_per_minute !== undefined
+                ? formatFiller(filler.value_per_minute)
                 : "計測対象外"
             }
           />

@@ -33,12 +33,9 @@ export function formatSpeakingSpeed(charsPerMin: number): string {
   return `${Math.round(charsPerMin)} 文字/分`;
 }
 
-/** フィラー: `12 回`（毎分の値を渡すと `12 回 / 2.1 回/分`） */
-export function formatFiller(count: number, perMinute?: number): string {
-  const base = `${Math.round(count)} 回`;
-  return perMinute === undefined
-    ? base
-    : `${base} / ${perMinute.toFixed(1)} 回/分`;
+/** フィラー（S-04・S-14）: `2.1 回/分` */
+export function formatFiller(perMinute: number): string {
+  return `${perMinute.toFixed(1)} 回/分`;
 }
 
 /** 件数: `12 件` */

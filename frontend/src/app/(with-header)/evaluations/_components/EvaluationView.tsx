@@ -140,6 +140,7 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
   const scores = evaluation.scores;
   const totalScore = evaluation.total_score;
   if (!scores || totalScore === null) return <ProcessingCard />;
+  const filler = scores.filler;
 
   const isTutorial = evaluation.company_id === null;
   const conditions = isTutorial
@@ -207,14 +208,11 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
           <UnmeasuredScoreCard label="話の速さ" />
         )}
         {/* フィラーの数は補足を持たない（S-14 4.3） */}
-        {scores.filler ? (
+        {filler?.value_per_minute !== undefined ? (
           <ScoreCard
             label="フィラーの数"
-            score={scores.filler.score}
-            measured={formatFiller(
-              scores.filler.value,
-              scores.filler.value_per_minute,
-            )}
+            score={filler.score}
+            measured={formatFiller(filler.value_per_minute)}
           />
         ) : (
           <UnmeasuredScoreCard label="フィラーの数" />
