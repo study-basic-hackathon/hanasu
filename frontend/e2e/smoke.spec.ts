@@ -535,12 +535,14 @@ test("S-08 からホームへ戻ると評価を作成しない", async ({ page }
   expect(evaluationRequestCount).toBe(0);
 });
 
-test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話を使う", async ({
+test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を clean / raw で切り替える", async ({
   page,
 }) => {
   await installFakeRecorder(page);
   const sttRequestCount = await mockStt(page);
+  let chatRequestCount = 0;
   await page.route("http://localhost:8000/interviews/chat", async (route) => {
+    chatRequestCount += 1;
     const body = route.request().postDataJSON();
     expect(body.history.at(-1)).toEqual({
       role: "user",
@@ -554,6 +556,14 @@ test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話�
     "/interview?companyId=1&strength=hard&answerMethod=voice&maxTurns=2",
   );
 
+  const cleanButton = page.getByRole("button", {
+    name: "文字起こし表示: フィラーなし",
+  });
+  const rawButton = page.getByRole("button", {
+    name: "文字起こし表示: フィラーあり",
+  });
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "true");
+
   await page.getByRole("button", { name: "回答を録音する" }).click();
   await page.waitForTimeout(1_100);
   await page
@@ -564,7 +574,30 @@ test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話�
   await expect(
     page.getByText("経験から学んだことを教えてください。"),
   ).toBeVisible();
+  await rawButton.click();
+  await expect(
+    page.getByText("%えー% 回答です。", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("回答です。", { exact: true })).toHaveCount(0);
   expect(sttRequestCount()).toBe(1);
+  expect(chatRequestCount).toBe(1);
+
+  await page.getByRole("button", { name: "回答を録音する" }).click();
+  await page.waitForTimeout(1_100);
+  await page
+    .getByRole("button", { name: "録音を停止して送信する" })
+    .click();
+
+  await expect(
+    page.getByText("%えー% 回答です。", { exact: true }),
+  ).toHaveCount(2);
+  await cleanButton.click();
+  await expect(page.getByText("回答です。", { exact: true })).toHaveCount(2);
+  await expect(
+    page.getByText("%えー% 回答です。", { exact: true }),
+  ).toHaveCount(0);
+  expect(sttRequestCount()).toBe(2);
+  expect(chatRequestCount).toBe(1);
 });
 
 test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡す", async ({

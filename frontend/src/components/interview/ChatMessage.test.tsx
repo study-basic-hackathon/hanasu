@@ -184,3 +184,77 @@ describe("ChatMessage の音声回答フィードバック", () => {
     expect(screen.queryByText("音声", { exact: false })).not.toBeInTheDocument();
   });
 });
+
+describe("ChatMessage の文字起こし表示", () => {
+  afterEach(() => cleanup());
+
+  it("音声回答はフィラーなしを初期表示し、フィラーありへ即時に切り替える", () => {
+    const turn = {
+      role: "user" as const,
+      content: "回答です。",
+      raw_content: "%えー% 回答です。",
+      audio_duration_ms: 2_000,
+    };
+    const view = render(
+      <ChatMessage
+        turn={turn}
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("回答です。", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.queryByText("%えー% 回答です。", { exact: true }),
+    ).not.toBeInTheDocument();
+
+    view.rerender(
+      <ChatMessage
+        turn={turn}
+        transcriptDisplayMode="raw"
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("%えー% 回答です。", { exact: true }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("回答です。", { exact: true }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    {
+      name: "文字入力の回答",
+      turn: {
+        role: "user" as const,
+        content: "文字入力の回答です。",
+        raw_content: "%えー% 変更しない回答です。",
+      },
+    },
+    {
+      name: "面接官の発言",
+      turn: {
+        role: "assistant" as const,
+        content: "面接官の質問です。",
+        raw_content: "%えー% 変更しない質問です。",
+      },
+    },
+  ])("$nameはフィラーありでも表示を変えない", ({ turn }) => {
+    render(
+      <ChatMessage
+        turn={turn}
+        transcriptDisplayMode="raw"
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(turn.content, { exact: true })).toBeInTheDocument();
+    expect(
+      screen.queryByText(turn.raw_content, { exact: true }),
+    ).not.toBeInTheDocument();
+  });
+});

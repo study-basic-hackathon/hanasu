@@ -119,6 +119,27 @@ describe("InterviewScreen の読み上げモード", () => {
     );
   }
 
+  it("文字起こし表示はフィラーなしを初期値とし、会話APIを呼ばずに切り替える", () => {
+    render(<InterviewScreen mode="interview" />);
+
+    const cleanButton = screen.getByRole("button", {
+      name: "文字起こし表示: フィラーなし",
+    });
+    const rawButton = screen.getByRole("button", {
+      name: "文字起こし表示: フィラーあり",
+    });
+    expect(cleanButton).toHaveAttribute("aria-pressed", "true");
+    expect(rawButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(rawButton);
+
+    expect(cleanButton).toHaveAttribute("aria-pressed", "false");
+    expect(rawButton).toHaveAttribute("aria-pressed", "true");
+    expect(mocks.requestNextQuestion).not.toHaveBeenCalled();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
+  });
+
   it("開始前の選択を表示直後に反映し、会話と回答方式を保ったまま切り替える", async () => {
     mocks.search =
       "companyId=7&strength=standard&answerMethod=text&readAloud=enabled&maxTurns=10";

@@ -23,6 +23,7 @@ import type {
   ChatTurn,
   QuestionStrength,
   ReadAloudMode,
+  TranscriptDisplayMode,
 } from "@/lib/domain";
 import { createEvaluation } from "@/lib/evaluation-api";
 import { buildEvaluationScores } from "@/lib/evaluation-score";
@@ -31,6 +32,7 @@ import {
   ANSWER_METHOD_LABEL,
   QUESTION_STRENGTH_LABEL,
   READ_ALOUD_MODE_LABEL,
+  TRANSCRIPT_DISPLAY_MODE_LABEL,
 } from "@/lib/domain";
 import {
   countFillers,
@@ -46,6 +48,7 @@ import { requestNextQuestion, synthesizeSpeech } from "@/lib/interview-api";
 export type InterviewMode = "interview" | "tutorial";
 
 const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
+const TRANSCRIPT_DISPLAY_MODES: TranscriptDisplayMode[] = ["clean", "raw"];
 const COMPLETION_TURN: ChatTurn = {
   role: "assistant",
   content: "お疲れ様でした",
@@ -106,6 +109,8 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     configuredReadAloudMode,
   );
+  const [transcriptDisplayMode, setTranscriptDisplayMode] =
+    useState<TranscriptDisplayMode>("clean");
   const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
@@ -563,6 +568,30 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
               </div>
             </div>
           )}
+          {!isTutorial && (
+            <div className="flex items-center gap-2 text-label text-ink-sub">
+              <span>会話ログ：</span>
+              <div className="flex overflow-hidden rounded-control border border-line-strong">
+                {TRANSCRIPT_DISPLAY_MODES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`文字起こし表示: ${TRANSCRIPT_DISPLAY_MODE_LABEL[value]}`}
+                    aria-pressed={transcriptDisplayMode === value}
+                    onClick={() => setTranscriptDisplayMode(value)}
+                    className={cn(
+                      "h-7 px-2.5 text-note",
+                      transcriptDisplayMode === value
+                        ? "bg-accent font-medium text-white"
+                        : "bg-surface text-ink-label hover:bg-canvas",
+                    )}
+                  >
+                    {TRANSCRIPT_DISPLAY_MODE_LABEL[value]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-label text-ink-sub">
@@ -596,6 +625,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
             <ChatMessage
               key={index}
               turn={turn}
+              transcriptDisplayMode={transcriptDisplayMode}
               speechStatus={
                 speechState.turnIndex === index ? speechState.status : "idle"
               }

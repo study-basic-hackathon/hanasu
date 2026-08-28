@@ -22,6 +22,16 @@ export const READ_ALOUD_MODE_LABEL: Record<ReadAloudMode, string> = {
   disabled: "読み上げない",
 };
 
+export type TranscriptDisplayMode = "clean" | "raw";
+
+export const TRANSCRIPT_DISPLAY_MODE_LABEL: Record<
+  TranscriptDisplayMode,
+  string
+> = {
+  clean: "フィラーなし",
+  raw: "フィラーあり",
+};
+
 /** S-05〜S-07 が扱う応募企業情報。応募情報 API の6項目と揃える。 */
 export type Application = {
   id: number;
@@ -79,7 +89,7 @@ export type Evaluation = {
 
 export type ChatTurn = {
   role: "assistant" | "user";
-  /** 画面に出すテキスト。 */
+  /** 通常の画面表示に使うテキスト。音声回答では STT のフィラー除去済みテキスト。 */
   content: string;
   /** STT のフィラートークン付きテキスト。chat / evaluation へ送る。 */
   raw_content?: string;
