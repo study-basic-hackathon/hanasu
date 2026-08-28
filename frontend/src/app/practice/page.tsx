@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Card } from "@/components/ui/Card";
-import { Chip } from "@/components/ui/Chip";
 
 /** サブ機能のメニュー（S-09 3章） */
 const PRACTICE_ITEMS = [
@@ -11,12 +10,6 @@ const PRACTICE_ITEMS = [
     name: "音読評価",
     description: "提示された文章を読み上げ、話し方を評価します。",
     href: "/practice/reading",
-  },
-  {
-    screenId: "S-11",
-    name: "滑舌練習",
-    description: "発音しにくい語句を読み上げます。",
-    href: "/practice/articulation",
   },
   {
     screenId: "S-12",
@@ -34,20 +27,13 @@ const PRACTICE_ITEMS = [
 
 /**
  * S-09 練習モード。弱点ごとの個別トレーニングの入口。
- * ハッカソンでは画面のモックだけを作り、評価は行わない（画面一覧 3章）。
+ * 音読・スピード・一問一答の個別トレーニングを選ぶ。
  */
 export default function PracticeMenuPage() {
   return (
     <div className="flex flex-1 flex-col">
       <SessionHeader
-        title={
-          <>
-            練習モード
-            <Chip tone="muted" className="text-[10px]">
-              画面モック
-            </Chip>
-          </>
-        }
+        title="練習モード"
         right={
           <Link
             href="/practice/setup?mode=practice"
@@ -62,10 +48,10 @@ export default function PracticeMenuPage() {
           <div className="flex flex-col gap-1.5">
             <h1 className="text-heading font-bold">練習メニュー</h1>
             <p className="text-label text-ink-sub">
-              弱点ごとの個別トレーニングです。この画面はモックで、評価は行われません。
+              弱点ごとの個別トレーニングです。取り組む練習を選んでください。
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-3 gap-5">
             {PRACTICE_ITEMS.map((item) => (
               <Link key={item.screenId} href={item.href}>
                 <Card className="flex h-full flex-col gap-2.5 p-6 hover:border-accent">
