@@ -454,6 +454,14 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     void goToEvaluation(evaluationTurns, true);
   }, [exitAction, finishInterview, goToEvaluation, router, turns]);
 
+  const requestHomeExit = useCallback(() => {
+    if (canEnd) {
+      setExitAction("home");
+      return;
+    }
+    if (finishInterview()) router.push("/");
+  }, [canEnd, finishInterview, router]);
+
   if (!isTutorial && companyId === null) {
     return (
       <div className="grid min-h-dvh place-items-center text-body-sm text-danger">
@@ -467,8 +475,8 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       <SessionHeader
         title={isTutorial ? "チュートリアル" : "本番モード"}
         right={
-          !hasReachedTurnLimit ? (
-            isTutorial ? (
+          isTutorial ? (
+            !hasReachedTurnLimit ? (
               <div className="flex items-center gap-3">
                 {!canEnd && (
                   <span className="text-note text-ink-muted">
@@ -485,21 +493,23 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
                   {evaluating ? "評価を開始しています" : "面接を終える"}
                 </Button>
               </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                {!canEnd && (
-                  <span className="text-note text-ink-muted">
-                    1問以上答えると評価できます。
-                  </span>
-                )}
-                <Button
-                  variant="secondary"
-                  size="xs"
-                  disabled={exitStarted}
-                  onClick={() => setExitAction("home")}
-                >
-                  ホーム
-                </Button>
+            ) : undefined
+          ) : (
+            <div className="flex items-center gap-3">
+              {!canEnd && (
+                <span className="text-note text-ink-muted">
+                  1問以上答えると評価できます。
+                </span>
+              )}
+              <Button
+                variant="secondary"
+                size="xs"
+                disabled={exitStarted}
+                onClick={requestHomeExit}
+              >
+                ホーム
+              </Button>
+              {!hasReachedTurnLimit && (
                 <Button
                   variant="danger"
                   size="xs"
@@ -509,9 +519,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
                 >
                   中断
                 </Button>
-              </div>
-            )
-          ) : undefined
+              )}
+            </div>
+          )
         }
       />
 
@@ -677,7 +687,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           <p className="text-note text-ink-muted">
             {hasReachedTurnLimit
               ? "この画面を離れると会話は失われます。評価は「評価を見る」を押したあとに行われます。"
-              : "この画面を離れると会話は失われます。評価は「面接を終える」を押したあとに行われます。"}
+              : "この画面を離れると会話は失われます。評価は「中断」を押したあとに行われます。"}
           </p>
         </div>
       </div>

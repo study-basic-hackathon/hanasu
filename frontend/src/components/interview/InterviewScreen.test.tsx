@@ -469,6 +469,17 @@ describe("InterviewScreen の読み上げモード", () => {
     );
   });
 
+  it("回答前のホーム操作は確認と評価なしで一度だけ遷移する", () => {
+    render(<InterviewScreen mode="interview" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).toHaveBeenCalledOnce();
+    expect(mocks.push).toHaveBeenCalledWith("/");
+  });
+
   it("ホーム確認後は進行中の chat と一時会話を破棄し、評価せず一度だけ遷移する", async () => {
     let chatSignal: AbortSignal | undefined;
     mocks.requestNextQuestion.mockImplementation(
@@ -480,6 +491,17 @@ describe("InterviewScreen の読み上げモード", () => {
     render(<InterviewScreen mode="interview" />);
     submitAnswer("破棄する回答です。");
     await waitFor(() => expect(mocks.requestNextQuestion).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "ホームに戻ると、この会話は失われます。評価は行われません。",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+
+    expect(chatSignal?.aborted).toBe(false);
+    expect(screen.getByText("破棄する回答です。")).toBeInTheDocument();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
     const confirm = screen.getByRole("button", { name: "ホームに戻る" });
@@ -529,6 +551,7 @@ describe("InterviewScreen の読み上げモード", () => {
     expect(
       screen.queryByRole("button", { name: "面接を終える" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ホーム" })).toBeEnabled();
 
     const evaluationButton = screen.getByRole("button", {
       name: "評価を見る",
