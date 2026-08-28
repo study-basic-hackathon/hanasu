@@ -7,7 +7,11 @@ import {
   AnswerPanel,
   type AnswerDetail,
 } from "@/components/interview/AnswerPanel";
-import { ChatMessage, ThinkingMessage } from "@/components/interview/ChatMessage";
+import {
+  ChatMessage,
+  type SpeechStatus,
+  ThinkingMessage,
+} from "@/components/interview/ChatMessage";
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -36,12 +40,19 @@ import {
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
 } from "@/lib/interview";
-import { requestNextQuestion } from "@/lib/interview-api";
+import { requestNextQuestion, synthesizeSpeech } from "@/lib/interview-api";
 
 /** S-08 本番モードと、それを流用する S-03 チュートリアル（S-08 9章） */
 export type InterviewMode = "interview" | "tutorial";
 
 const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
+
+type SpeechState = {
+  turnIndex: number | null;
+  status: SpeechStatus;
+};
+
+const IDLE_SPEECH_STATE: SpeechState = { turnIndex: null, status: "idle" };
 
 function questionStrengthOf(value: string | null): QuestionStrength | null {
   return value === "easy" || value === "standard" || value === "hard"
@@ -89,13 +100,115 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     configuredReadAloudMode,
   );
-  const [speechStopSignal, setSpeechStopSignal] = useState(0);
+  const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechObjectUrlRef = useRef<string | null>(null);
+  const speechControllerRef = useRef<AbortController | null>(null);
+  const speechOperationIdRef = useRef(0);
+  const pendingAutoSpeechIndexRef = useRef<number | null>(null);
+
+  const releaseSpeech = useCallback(() => {
+    speechControllerRef.current?.abort();
+    speechControllerRef.current = null;
+
+    if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    if (speechObjectUrlRef.current) {
+      URL.revokeObjectURL(speechObjectUrlRef.current);
+      speechObjectUrlRef.current = null;
+    }
+  }, []);
+
+  const stopSpeech = useCallback(() => {
+    speechOperationIdRef.current += 1;
+    releaseSpeech();
+    setSpeechState(IDLE_SPEECH_STATE);
+  }, [releaseSpeech]);
+
+  const startSpeech = useCallback(
+    async (turnIndex: number, text: string) => {
+      const operationId = ++speechOperationIdRef.current;
+      releaseSpeech();
+
+      const controller = new AbortController();
+      speechControllerRef.current = controller;
+      setSpeechState({ turnIndex, status: "loading" });
+
+      const fail = () => {
+        if (operationId !== speechOperationIdRef.current) return;
+        speechOperationIdRef.current += 1;
+        releaseSpeech();
+        setSpeechState({ turnIndex, status: "error" });
+      };
+
+      try {
+        const blob = await synthesizeSpeech(text, controller.signal);
+        if (
+          operationId !== speechOperationIdRef.current ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        speechControllerRef.current = null;
+
+        const objectUrl = URL.createObjectURL(blob);
+        speechObjectUrlRef.current = objectUrl;
+        audioRef.current ??= new Audio();
+        audioRef.current.src = objectUrl;
+        audioRef.current.onended = () => {
+          if (operationId !== speechOperationIdRef.current) return;
+          speechOperationIdRef.current += 1;
+          releaseSpeech();
+          setSpeechState(IDLE_SPEECH_STATE);
+        };
+        audioRef.current.onerror = fail;
+
+        await audioRef.current.play();
+        if (operationId !== speechOperationIdRef.current) return;
+        setSpeechState({ turnIndex, status: "playing" });
+      } catch {
+        if (
+          operationId !== speechOperationIdRef.current ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        fail();
+      }
+    },
+    [releaseSpeech],
+  );
+
+  const toggleSpeech = useCallback(
+    (turnIndex: number, text: string) => {
+      if (
+        speechState.turnIndex === turnIndex &&
+        speechState.status === "playing"
+      ) {
+        stopSpeech();
+        return;
+      }
+      void startSpeech(turnIndex, text);
+    },
+    [speechState, startSpeech, stopSpeech],
+  );
+
+  useEffect(() => {
+    return () => {
+      speechOperationIdRef.current += 1;
+      releaseSpeech();
+    };
+  }, [releaseSpeech]);
 
   useEffect(() => {
     if (isTutorial || companyId === null) return;
@@ -119,6 +232,16 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ block: "end" });
   }, [turns, waiting]);
+
+  useEffect(() => {
+    const turnIndex = pendingAutoSpeechIndexRef.current;
+    if (turnIndex === null) return;
+    pendingAutoSpeechIndexRef.current = null;
+    const turn = turns[turnIndex];
+    if (readAloudMode === "enabled" && turn?.role === "assistant") {
+      void startSpeech(turnIndex, turn.content);
+    }
+  }, [readAloudMode, startSpeech, turns]);
 
   // 再読み込み・タブを閉じる操作には確認を出す（共通仕様 7.3）
   useEffect(() => {
@@ -209,8 +332,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         history: nextTurns,
       })
         .then((nextQuestion) => {
-          setTurns((current) => [
-            ...current,
+          pendingAutoSpeechIndexRef.current = nextTurns.length;
+          setTurns([
+            ...nextTurns,
             { role: "assistant", content: nextQuestion, time: nowClock() },
           ]);
           setWaiting(false);
@@ -300,7 +424,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
                       if (value === readAloudMode) return;
                       setReadAloudMode(value);
                       if (value === "disabled") {
-                        setSpeechStopSignal((current) => current + 1);
+                        stopSpeech();
                       }
                     }}
                     className={cn(
@@ -349,7 +473,10 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
             <ChatMessage
               key={index}
               turn={turn}
-              speechStopSignal={speechStopSignal}
+              speechStatus={
+                speechState.turnIndex === index ? speechState.status : "idle"
+              }
+              onToggleSpeech={() => toggleSpeech(index, turn.content)}
             />
           ))}
           {waiting && <ThinkingMessage />}

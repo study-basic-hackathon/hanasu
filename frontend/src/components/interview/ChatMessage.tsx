@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import { cn } from "@/lib/cn";
 import type { ChatTurn } from "@/lib/domain";
-import { synthesizeSpeech } from "@/lib/interview-api";
+
+export type SpeechStatus = "idle" | "loading" | "playing" | "error";
 
 /**
  * 会話ログの1件（S-08 5章）。
@@ -12,10 +11,12 @@ import { synthesizeSpeech } from "@/lib/interview-api";
  */
 export function ChatMessage({
   turn,
-  speechStopSignal,
+  speechStatus,
+  onToggleSpeech,
 }: {
   turn: ChatTurn;
-  speechStopSignal: number;
+  speechStatus: SpeechStatus;
+  onToggleSpeech: () => void;
 }) {
   const isSelf = turn.role === "user";
 
@@ -53,11 +54,7 @@ export function ChatMessage({
           ) : (
             <>
               {turn.time && <span>{turn.time}</span>}
-              {/* 読み上げないへの切替時は再生処理を破棄し、手動操作は通常表示へ戻す。 */}
-              <SpeakButton
-                key={speechStopSignal}
-                text={turn.content}
-              />
+              <SpeakButton status={speechStatus} onToggle={onToggleSpeech} />
             </>
           )}
         </div>
@@ -93,63 +90,20 @@ function Avatar({ label, muted }: { label: string; muted?: boolean }) {
 }
 
 /**
- * 「読み上げる」（S-08 5.1）。POST /interviews/tts の音声を再生する。
+ * 「読み上げる」（S-08 5.1）。再生処理は画面共通プレイヤーへ委譲する。
  */
-function SpeakButton({ text }: { text: string }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">("idle");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
-  const operationIdRef = useRef(0);
-
-  const release = useCallback(() => {
-    operationIdRef.current += 1;
-    audioRef.current?.pause();
-    audioRef.current = null;
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    objectUrlRef.current = null;
-  }, []);
-
-  useEffect(() => release, [release]);
-
-  async function toggleSpeech() {
-    if (status === "playing") {
-      release();
-      setStatus("idle");
-      return;
-    }
-
-    setStatus("loading");
-    const operationId = ++operationIdRef.current;
-    try {
-      const blob = await synthesizeSpeech(text);
-      if (operationId !== operationIdRef.current) return;
-      const objectUrl = URL.createObjectURL(blob);
-      const audio = new Audio(objectUrl);
-      objectUrlRef.current = objectUrl;
-      audioRef.current = audio;
-      audio.addEventListener("ended", () => {
-        release();
-        setStatus("idle");
-      });
-      audio.addEventListener("error", () => {
-        release();
-        setStatus("error");
-      });
-      await audio.play();
-      if (operationId !== operationIdRef.current) return;
-      setStatus("playing");
-    } catch {
-      if (operationId !== operationIdRef.current) return;
-      release();
-      setStatus("error");
-    }
-  }
-
+function SpeakButton({
+  status,
+  onToggle,
+}: {
+  status: SpeechStatus;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
       disabled={status === "loading"}
-      onClick={toggleSpeech}
+      onClick={onToggle}
       className="text-accent hover:underline disabled:opacity-50"
     >
       {status === "loading"
@@ -157,7 +111,7 @@ function SpeakButton({ text }: { text: string }) {
         : status === "playing"
           ? "停止する"
           : status === "error"
-            ? "再試行する"
+            ? "読み上げられませんでした。再試行する"
             : "読み上げる"}
     </button>
   );
