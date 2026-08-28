@@ -32,7 +32,7 @@ function ScoreBars({ evaluation }: { evaluation: Evaluation }) {
 
   const values = [
     scores.speaking_speed?.score ?? null,
-    scores.filler.score,
+    scores.filler?.score ?? null,
     scores.structure_content.score,
   ];
 

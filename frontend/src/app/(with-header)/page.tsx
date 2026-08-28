@@ -102,8 +102,12 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
           />
           <ScoreRow
             label="フィラーの数"
-            score={scores.filler.score}
-            measured={formatFiller(scores.filler.value)}
+            score={scores.filler?.score ?? null}
+            measured={
+              scores.filler
+                ? formatFiller(scores.filler.value)
+                : "計測対象外"
+            }
           />
           <ScoreRow
             label="構成・内容"
