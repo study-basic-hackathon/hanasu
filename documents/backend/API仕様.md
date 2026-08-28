@@ -111,6 +111,7 @@ audio: <録音した音声 (webm/opus)>
 - **`raw_transcript` を捨てない。** 整形すると評価が機能しなくなる。`clean_transcript` は**画面表示専用**であり、LLM に渡すのは `raw_transcript`
 - **話速は文字数 ÷ 発話時間で算出する。** 音声の長さはサーバー側で取れるため、`duration_ms` / `chars` / `chars_per_min` までサーバーが算出して返す
 - **フィラーの頻度は `filler_count ÷ 発話時間` で算出し、`filler_count_per_min` として小数第1位まで返す**（画面表示は`documents/frontend/01_design/screen_common.md`の「回 / 回/分」形式）
+- 評価時は回答ごとの `chars` / `filler_count` / `duration_ms` を合算する。表示用に丸めた `chars_per_min` / `filler_count_per_min` は、回答間で平均せず、点数化にも使わない（[評価仕様](../評価仕様.md) 3章）
 - **文字入力のターンではこの API を呼ばない**
 
 ### 5.3 `POST /interviews/chat` — 次の質問
@@ -162,8 +163,8 @@ audio: <録音した音声 (webm/opus)>
     { "role": "user",      "content": "%えー% 田中と申します。前職では..." }
   ],
   "scores": {
-    "speaking_speed": { "score": 80, "value": 284, "unit": "文字/分" },
-    "filler":         { "score": 55, "value": 14,  "unit": "回" }
+    "speaking_speed": { "score": 90, "value": 284, "unit": "文字/分" },
+    "filler":         { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" }
   }
 }
 ```
@@ -176,6 +177,7 @@ audio: <録音した音声 (webm/opus)>
 - **`company_id` はチュートリアルでは省略する**（評価結果テーブルの企業IDは NULL を許す）
 - **`turns` は `role` / `content` のみ。** 定量指標は含めない
 - **定量はコード、定性は LLM**（[ADR-0009](../ADR/0009-評価方式.md)）。`scores` は**クライアントが算出済みのものを受け取り、DB に保存するだけで LLM には渡さない**
+- **定量スコアの計算規則は [評価仕様](../評価仕様.md) が正本。** 指標を計測できる音声回答がない場合は、`speaking_speed` または `filler` を `scores` から省略する。0点として送らない
 - **LLM は `turns` だけを見て定性評価（構成・内容）を行う**
 - レスポンスは `evaluation_id` のみ。**評価処理は非同期で走る**
 
@@ -193,10 +195,10 @@ audio: <録音した音声 (webm/opus)>
   "company_id": 12,
   "status": "completed",
   "created_at": "2026-08-16T14:32:00Z",
-  "total_score": 72,
+  "total_score": 76,
   "scores": {
-    "speaking_speed":    { "score": 80, "value": 284, "unit": "文字/分" },
-    "filler":            { "score": 55, "value": 14,  "unit": "回" },
+    "speaking_speed":    { "score": 90, "value": 284, "unit": "文字/分" },
+    "filler":            { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" },
     "structure_content": { "score": 72, "comment": "結論が後半に来る回答が目立つ。具体例は良い" }
   },
   "advice": ["「結論 → 理由 → 具体例」の順で話すと伝わりやすくなります"]
@@ -210,6 +212,7 @@ audio: <録音した音声 (webm/opus)>
 
 - **状態は `processing` / `completed` / `failed` の3つ。** `completed` になるまでクライアントがポーリングする。**`failed` がないと、LLM が落ちたときフロントが永久にポーリングし続ける**
 - **`speaking_speed` / `filler` は `POST /evaluations` で受け取った値をそのまま返す。** `structure_content` と `advice` が LLM の出力
+- **`total_score` はバックエンドが算出する。** `speaking_speed` / `filler` / `structure_content` のうち存在するスコアを等価平均して四捨五入し、任意の `pause` は含めない（[評価仕様](../評価仕様.md) 5章）
 - **合否の目安は返さない。** クライアントが `total_score` から判定する
 - **評価履歴からの詳細表示もこの API を使う**
 
@@ -219,7 +222,7 @@ audio: <録音した音声 (webm/opus)>
 // レスポンス
 {
   "evaluations": [
-    { "evaluation_id": 87, "created_at": "2026-08-16T14:32:00Z", "status": "completed", "total_score": 72 },
+    { "evaluation_id": 87, "created_at": "2026-08-16T14:32:00Z", "status": "completed", "total_score": 76 },
     { "evaluation_id": 64, "created_at": "2026-08-14T10:05:00Z", "status": "completed", "total_score": 65 }
   ]
 }
@@ -230,7 +233,7 @@ audio: <録音した音声 (webm/opus)>
 
 ### 5.8 評価する指標
 
-[ADR-0009](../ADR/0009-評価方式.md) で確定。
+[ADR-0009](../ADR/0009-評価方式.md) で評価項目と責務を、[評価仕様](../評価仕様.md) で計算規則を確定している。
 
 | 指標 | 算出 | scores のキー |
 |---|---|---|
@@ -239,7 +242,7 @@ audio: <録音した音声 (webm/opus)>
 | 構成・内容 | **LLM が評価する定性項目** | `structure_content` |
 | 間の長さ | **任意。** 実装する場合は VAD の区間記録から算出する | 未確定 |
 
-**「抑揚」「声の大きさ」は採らない**（[ADR-0009](../ADR/0009-評価方式.md)）。
+**「抑揚」「声の大きさ」は採らない**（[ADR-0009](../ADR/0009-評価方式.md)）。話速・フィラーの対象回答、基準点、線形補間、丸め、欠測時処理、総合スコアは [評価仕様](../評価仕様.md) に従う。
 
 ## 6. データモデル
 
@@ -266,12 +269,11 @@ audio: <録音した音声 (webm/opus)>
 | 1 | **パス名と ID の命名。** `/interviews/*` に揃えるか、`company_id` を `application_id` に改める（既存 API は `/token` `/users/me` とプレフィックスなし） | 各 API の実装時 |
 | 2 | **応募情報の項目定義**（企業名以外の入力項目と、CRUD の入出力の中身） | [#17](https://github.com/study-basic-hackathon/hanasu/issues/17) |
 | 3 | **質問強度のフィールド名と値の表記**（楽々 / 標準 / 厳しめ をどう表すか） | 会話 API の実装時 |
-| 4 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**クライアント側に置かれる** | [ADR-0009](../ADR/0009-評価方式.md) のフォローアップ（実装時） |
-| 5 | **「間の長さ」を評価に加える場合の `scores` のキー**と、項目別スコア表示との対応 | 実装時 |
-| 6 | **フィラーの定義範囲。** `keepFillerToken=1` が期待どおり効くか、「なんか」「まあ」等を含めるか | [#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
-| 7 | **非同期処理の実装方式**（`BackgroundTasks` / ワーカー分離）とポーリング間隔 | 評価 API の実装時 |
-| 8 | **TTS のサービス選定**（Amazon Polly / 外部 API など） | TTS を作ると決めた時点 |
-| 9 | **画面のために加えることが決まった項目**（評価結果の企業名・質問の強度・ターン数、評価履歴一覧の企業と項目別スコア）。**新しいエンドポイントは増えない** | [画面と API の対応](../frontend/01_design/screen_api_map.md) 6章に一覧がある。**本書への反映は各 API の実装時** |
+| 4 | **「間の長さ」を評価に加える場合の `scores` のキー**と、項目別スコア表示との対応 | 実装時 |
+| 5 | **フィラーの定義範囲。** `keepFillerToken=1` が期待どおり効くか、「なんか」「まあ」等を含めるか | [#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
+| 6 | **非同期処理の実装方式**（`BackgroundTasks` / ワーカー分離）とポーリング間隔 | 評価 API の実装時 |
+| 7 | **TTS のサービス選定**（Amazon Polly / 外部 API など） | TTS を作ると決めた時点 |
+| 8 | **画面のために加えることが決まった項目**（評価結果の企業名・質問の強度・ターン数、評価履歴一覧の企業と項目別スコア）。**新しいエンドポイントは増えない** | [画面と API の対応](../frontend/01_design/screen_api_map.md) 6章に一覧がある。**本書への反映は各 API の実装時** |
 
 ## 8. 参考
 
@@ -279,6 +281,8 @@ audio: <録音した音声 (webm/opus)>
 - [ADR-0007 会話音声の取得と保存方式](../ADR/0007-会話音声の取得と保存方式.md) — 音声はブラウザで取得し永続化しない
 - [ADR-0008 会話用APIの構成](../ADR/0008-会話用APIの構成.md) — API の分割とステートレス、非同期評価
 - [ADR-0009 評価方式](../ADR/0009-評価方式.md) — 評価指標と、定量 / 定性の分担
+- [ADR-0020 定量スコアの点数化基準](../ADR/0020-定量スコアの点数化基準.md) — 点数化と総合スコアの決定理由
+- [評価仕様](../評価仕様.md) — 定量スコアと総合スコアの計算規則
 - [ADR-0010 音声認識とLLMの基盤選定](../ADR/0010-音声認識とLLMの基盤選定.md) — STT は AmiVoice、LLM は Bedrock
 - [ADR-0011 会員登録と利用アカウント](../ADR/0011-会員登録と利用アカウント.md) — 会員登録を作らず固定の ID / パスワード1組を使う
 - [画面と API の対応](../frontend/01_design/screen_api_map.md) — どの画面がどの API を呼ぶか
