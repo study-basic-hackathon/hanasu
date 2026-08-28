@@ -188,7 +188,7 @@ describe("ChatMessage の音声回答フィードバック", () => {
 describe("ChatMessage の文字起こし表示", () => {
   afterEach(() => cleanup());
 
-  it("音声回答はフィラーなしを初期表示し、フィラーありへ即時に切り替える", () => {
+  it("音声回答はフィラーなしを初期表示し、フィラーありでは記号を除いて色を変える", () => {
     const turn = {
       role: "user" as const,
       content: "回答です。",
@@ -217,12 +217,41 @@ describe("ChatMessage の文字起こし表示", () => {
       />,
     );
 
-    expect(
-      screen.getByText("%えー% 回答です。", { exact: true }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("回答です。", { exact: true }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("えー", { exact: true })).toHaveClass(
+      "bg-accent-soft",
+      "text-accent",
+    );
+    expect(screen.getByLabelText("フィラー: えー")).toBeInTheDocument();
+    expect(screen.getByText("えー", { exact: true })).not.toHaveTextContent(
+      "%",
+    );
+    expect(view.container).toHaveTextContent("えー 回答です。");
+    expect(view.container).not.toHaveTextContent("%えー%");
+  });
+
+  it("複数のフィラートークンをそれぞれ記号なしで色分けする", () => {
+    const view = render(
+      <ChatMessage
+        turn={{
+          role: "user",
+          content: "回答です。",
+          raw_content: "%えー% %あの% 回答です。",
+          audio_seconds: 2,
+        }}
+        transcriptDisplayMode="raw"
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("えー", { exact: true })).toHaveClass(
+      "text-accent",
+    );
+    expect(screen.getByText("あの", { exact: true })).toHaveClass(
+      "text-accent",
+    );
+    expect(view.container).not.toHaveTextContent("%えー%");
+    expect(view.container).not.toHaveTextContent("%あの%");
   });
 
   it.each([
