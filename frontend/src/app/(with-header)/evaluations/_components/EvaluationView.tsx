@@ -207,14 +207,18 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
           <UnmeasuredScoreCard label="話の速さ" />
         )}
         {/* フィラーの数は補足を持たない（S-14 4.3） */}
-        <ScoreCard
-          label="フィラーの数"
-          score={scores.filler.score}
-          measured={formatFiller(
-            scores.filler.value,
-            scores.filler.value_per_minute,
-          )}
-        />
+        {scores.filler ? (
+          <ScoreCard
+            label="フィラーの数"
+            score={scores.filler.score}
+            measured={formatFiller(
+              scores.filler.value,
+              scores.filler.value_per_minute,
+            )}
+          />
+        ) : (
+          <UnmeasuredScoreCard label="フィラーの数" />
+        )}
         <ScoreCard
           label="構成・内容"
           score={scores.structure_content.score}

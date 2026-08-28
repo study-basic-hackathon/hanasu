@@ -53,12 +53,14 @@ export type QualitativeScore = {
 export type EvaluationScores = {
   /** 文字入力だけの面接では計測できないため持たない。 */
   speaking_speed?: QuantitativeScore;
-  filler: QuantitativeScore;
+  /** 音声の計測値がない回答では持たない。 */
+  filler?: QuantitativeScore;
   structure_content: QualitativeScore;
 };
 
-export type EvaluationQuantitativeScores = Pick<EvaluationScores, "filler"> &
-  Partial<Pick<EvaluationScores, "speaking_speed">>;
+export type EvaluationQuantitativeScores = Partial<
+  Pick<EvaluationScores, "speaking_speed" | "filler">
+>;
 
 /**
  * API がまだ返さない実施条件は null にし、取得不能な値は画面で「—」表示する。

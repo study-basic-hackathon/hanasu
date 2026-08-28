@@ -28,6 +28,22 @@ const evaluation = {
   advice: ["最初に結論を置き、経験を数値で補足しましょう。"],
 };
 
+const textEvaluation = {
+  evaluation_id: 88,
+  company_id: 1,
+  company_name: company.company_name,
+  status: "completed",
+  created_at: "2026-08-25T03:00:00Z",
+  total_score: 72,
+  scores: {
+    structure_content: {
+      score: 72,
+      comment: "結論を先に伝えられています。",
+    },
+  },
+  advice: ["具体例を加えましょう。"],
+};
+
 async function mockApi(page: Page) {
   await page.addInitScript(() => {
     window.sessionStorage.setItem("hanasu.accessToken", "e2e-token");
@@ -76,6 +92,14 @@ async function mockApi(page: Page) {
       return fulfillJson(route, {
         evaluations: [
           {
+            evaluation_id: textEvaluation.evaluation_id,
+            company_name: textEvaluation.company_name,
+            status: textEvaluation.status,
+            created_at: textEvaluation.created_at,
+            total_score: textEvaluation.total_score,
+            scores: textEvaluation.scores,
+          },
+          {
             evaluation_id: evaluation.evaluation_id,
             company_name: evaluation.company_name,
             status: evaluation.status,
@@ -90,22 +114,7 @@ async function mockApi(page: Page) {
       return fulfillJson(route, evaluation);
     }
     if (pathname === "/evaluations/88") {
-      return fulfillJson(route, {
-        evaluation_id: 88,
-        company_id: 1,
-        company_name: company.company_name,
-        status: "completed",
-        created_at: "2026-08-25T03:00:00Z",
-        total_score: 76,
-        scores: {
-          filler: { score: 80, value: 1, unit: "回" },
-          structure_content: {
-            score: 72,
-            comment: "結論を先に伝えられています。",
-          },
-        },
-        advice: ["具体例を加えましょう。"],
-      });
+      return fulfillJson(route, textEvaluation);
     }
 
     return route.fulfill({ status: 404, body: "Not Found" });
@@ -227,6 +236,13 @@ test("主要ページをグローバルナビゲーションで移動できる",
 
   await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
 
+  await page.getByRole("link", { name: "履歴", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/evaluations$/);
+  await expect(page.getByRole("heading", { name: "履歴" })).toBeVisible();
+
+  await page.getByRole("link", { name: "ホーム", exact: true }).click();
+
   await page.getByRole("link", { name: "応募先企業", exact: true }).click();
 
   await expect(page).toHaveURL(/\/companies$/);
@@ -269,7 +285,7 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
   await expect(
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
-  await expect(page.getByText("計測対象外")).toBeVisible();
+  await expect(page.getByText("計測対象外")).toHaveCount(2);
 });
 
 test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話を使う", async ({
