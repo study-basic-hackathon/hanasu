@@ -2,6 +2,13 @@
 
 import { cn } from "@/lib/cn";
 import type { ChatTurn } from "@/lib/domain";
+import {
+  SCORE_TEXT_CLASS,
+  SPEAKING_SPEED_RANGE,
+  scoreFillerRate,
+  scoreLevel,
+  scoreSpeakingSpeed,
+} from "@/lib/score";
 
 export type SpeechStatus = "idle" | "loading" | "playing" | "error";
 
@@ -41,30 +48,110 @@ export function ChatMessage({
         >
           {turn.content}
         </div>
-        <div className="flex items-center gap-3 text-note text-ink-muted">
+        <div className="flex flex-col items-end gap-1 text-note text-ink-muted">
           {isSelf ? (
             <>
-              {/* 文字入力で答えたターンには `音声 <秒> 秒` を出さない */}
-              {turn.audio_seconds !== undefined && (
-                <span>音声 {turn.audio_seconds} 秒</span>
-              )}
-              {turn.filler_count !== undefined && (
-                <span>フィラー {turn.filler_count}</span>
-              )}
-              <span>{turn.time}</span>
+              <UserAnswerDetails turn={turn} />
             </>
           ) : (
-            <>
+            <div className="flex items-center gap-3">
               {turn.time && <span>{turn.time}</span>}
               {speechEnabled && (
                 <SpeakButton status={speechStatus} onToggle={onToggleSpeech} />
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
       {isSelf && <Avatar label="自分" muted />}
     </div>
+  );
+}
+
+function UserAnswerDetails({ turn }: { turn: ChatTurn }) {
+  const isVoiceAnswer =
+    turn.audio_seconds !== undefined || turn.audio_duration_ms !== undefined;
+
+  if (!isVoiceAnswer) {
+    return turn.time ? <span>{turn.time}</span> : null;
+  }
+
+  const speakingSpeed = measuredValue(turn.chars_per_min);
+  const fillerCount = measuredValue(turn.filler_count);
+  const fillerRate = measuredValue(turn.filler_count_per_min);
+  const speakingLevel =
+    speakingSpeed === undefined
+      ? undefined
+      : scoreLevel(scoreSpeakingSpeed(speakingSpeed));
+  const fillerLevel =
+    fillerCount === undefined || fillerRate === undefined
+      ? undefined
+      : scoreLevel(scoreFillerRate(fillerRate));
+  const shouldReduceFillers = fillerLevel === "improve";
+  const shouldSlowDown =
+    speakingLevel === "improve" &&
+    speakingSpeed !== undefined &&
+    speakingSpeed > SPEAKING_SPEED_RANGE.max;
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        {turn.audio_seconds !== undefined && (
+          <span>音声 {turn.audio_seconds} 秒</span>
+        )}
+        <AnswerMetric
+          label="話速"
+          value={speakingSpeed}
+          unit="文字/分"
+          level={speakingLevel}
+        />
+        <AnswerMetric
+          label="フィラー"
+          value={fillerCount}
+          unit="回"
+          level={fillerLevel}
+        />
+        {turn.time && <span>{turn.time}</span>}
+      </div>
+      {shouldReduceFillers && (
+        <p className="text-danger">次はフィラーを少なめにしましょう</p>
+      )}
+      {shouldSlowDown && (
+        <p className="text-danger">次はもう少しゆっくり話しましょう</p>
+      )}
+    </>
+  );
+}
+
+function measuredValue(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function AnswerMetric({
+  label,
+  value,
+  unit,
+  level,
+}: {
+  label: string;
+  value: number | undefined;
+  unit: string;
+  level: ReturnType<typeof scoreLevel> | undefined;
+}) {
+  if (value === undefined || level === undefined) {
+    return (
+      <span>
+        {label} 計測値なし
+      </span>
+    );
+  }
+
+  return (
+    <span>
+      {label} <span className={SCORE_TEXT_CLASS[level]}>{value}</span> {unit}
+    </span>
   );
 }
 
@@ -94,7 +181,7 @@ function Avatar({ label, muted }: { label: string; muted?: boolean }) {
 }
 
 /**
- * 「読み上げる」（S-08 5.1）。再生処理は画面共通プレイヤーへ委譲する。
+ * 「読み上げる」（S-08 5.2）。再生処理は画面共通プレイヤーへ委譲する。
  */
 function SpeakButton({
   status,

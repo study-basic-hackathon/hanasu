@@ -76,3 +76,111 @@ describe("ChatMessage の読み上げ操作", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("ChatMessage の音声回答フィードバック", () => {
+  afterEach(() => cleanup());
+
+  function renderAnswer(
+    turn: Parameters<typeof ChatMessage>[0]["turn"],
+  ) {
+    render(
+      <ChatMessage
+        turn={turn}
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+      />,
+    );
+  }
+
+  it.each([
+    {
+      name: "良好",
+      charsPerMin: 225,
+      fillerCount: 2,
+      fillerCountPerMin: 2,
+      className: "text-accent",
+    },
+    {
+      name: "注意",
+      charsPerMin: 100,
+      fillerCount: 3,
+      fillerCountPerMin: 5,
+      className: "text-warning",
+    },
+  ])(
+    "$nameの話速とフィラーへ評価結果画面と同じ色を付ける",
+    ({ charsPerMin, fillerCount, fillerCountPerMin, className }) => {
+      renderAnswer({
+        role: "user",
+        content: "音声回答です。",
+        audio_seconds: 30,
+        chars_per_min: charsPerMin,
+        filler_count: fillerCount,
+        filler_count_per_min: fillerCountPerMin,
+      });
+
+      expect(screen.getByText(String(charsPerMin))).toHaveClass(className);
+      expect(screen.getByText(String(fillerCount))).toHaveClass(className);
+      expect(screen.getByText(`話速`, { exact: false })).toHaveTextContent(
+        `話速 ${charsPerMin} 文字/分`,
+      );
+      expect(screen.getByText(`フィラー`, { exact: false })).toHaveTextContent(
+        `フィラー ${fillerCount} 回`,
+      );
+    },
+  );
+
+  it("要改善の値を赤色にし、フィラー過多と速すぎる話速の助言を表示する", () => {
+    renderAnswer({
+      role: "user",
+      content: "音声回答です。",
+      audio_seconds: 30,
+      chars_per_min: 400,
+      filler_count: 4,
+      filler_count_per_min: 6,
+    });
+
+    expect(screen.getByText("400")).toHaveClass("text-danger");
+    expect(screen.getByText("4")).toHaveClass("text-danger");
+    expect(
+      screen.getByText("次はフィラーを少なめにしましょう"),
+    ).toHaveClass("text-danger");
+    expect(
+      screen.getByText("次はもう少しゆっくり話しましょう"),
+    ).toHaveClass("text-danger");
+  });
+
+  it("音声回答の計測値が欠けた指標を計測値なしとして表示する", () => {
+    renderAnswer({
+      role: "user",
+      content: "音声回答です。",
+      audio_seconds: 30,
+    });
+
+    expect(screen.getAllByText("計測値なし", { exact: false })).toHaveLength(
+      2,
+    );
+    expect(
+      screen.queryByText("次はフィラーを少なめにしましょう"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("次はもう少しゆっくり話しましょう"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("文字入力の回答には話速とフィラー評価を表示しない", () => {
+    renderAnswer({
+      role: "user",
+      content: "文字入力の回答です。",
+      filler_count: 2,
+      time: "12:34",
+    });
+
+    expect(screen.getByText("12:34")).toBeInTheDocument();
+    expect(screen.queryByText("話速", { exact: false })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("フィラー", { exact: false }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("音声", { exact: false })).not.toBeInTheDocument();
+  });
+});
