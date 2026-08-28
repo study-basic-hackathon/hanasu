@@ -1,10 +1,13 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_cors_allowed_origins
-from app.routers import auth, companies, evaluations, interviews
+from app.routers import auth, companies, evaluations, interviews, job_postings
 from app.seed import seed_evaluations, seed_user
 
 # 開発用のテストユーザー・評価履歴サンプルの投入
@@ -24,6 +27,17 @@ def health():
 def create_app(allowed_origins: list[str] | None = None) -> FastAPI:
     api = FastAPI(title="hanasu API")
 
+    @api.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
+        if request.method == "POST" and request.url.path == "/job-postings/summary":
+            return JSONResponse(
+                status_code=422,
+                content={"detail": job_postings.INVALID_URL_DETAIL},
+            )
+        return await request_validation_exception_handler(request, exc)
+
     api.add_middleware(
         CORSMiddleware,
         allow_origins=(
@@ -38,6 +52,7 @@ def create_app(allowed_origins: list[str] | None = None) -> FastAPI:
 
     api.include_router(auth.router)
     api.include_router(companies.router)
+    api.include_router(job_postings.router)
     api.include_router(interviews.router)
     api.include_router(evaluations.router)
     api.add_api_route("/", root, methods=["GET"])
