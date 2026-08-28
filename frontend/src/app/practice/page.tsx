@@ -50,7 +50,7 @@ export default function PracticeMenuPage() {
         }
         right={
           <Link
-            href="/practice/setup"
+            href="/practice/setup?mode=practice"
             className="text-label text-accent hover:underline"
           >
             設定に戻る

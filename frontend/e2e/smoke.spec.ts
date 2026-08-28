@@ -281,6 +281,91 @@ test("主要ページをグローバルナビゲーションで移動できる",
   await expect(
     page.getByRole("heading", { name: "応募企業情報" }),
   ).toBeVisible();
+  const setupNavigation = page.getByRole("link", { name: "練習の設定" });
+  await expect(setupNavigation).toHaveAttribute("href", "/");
+  await setupNavigation.click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("link", { name: "本番モードを始める" }),
+  ).toBeVisible();
+});
+
+test("ホームでモードを選び、設定・企業編集・開始・戻り先までモードを維持する", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const interviewLink = page.getByRole("link", {
+    name: "本番モードを始める",
+  });
+  const practiceLink = page.getByRole("link", {
+    name: "練習モードを始める",
+  });
+  await expect(interviewLink).toHaveAttribute(
+    "href",
+    "/practice/setup?mode=interview",
+  );
+  await expect(practiceLink).toHaveAttribute(
+    "href",
+    "/practice/setup?mode=practice",
+  );
+
+  await interviewLink.click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(
+    page.getByRole("heading", { name: "本番モードの設定" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "練習モード" })).toHaveCount(
+    0,
+  );
+
+  await page.getByRole("link", { name: "企業を追加" }).click();
+  await page.getByRole("link", { name: "取り消す" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+
+  await page.getByRole("link", { name: "編集" }).click();
+  await page.getByRole("link", { name: "取り消す" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+
+  await page.getByRole("button", { name: company.company_name }).click();
+  await page.getByRole("button", { name: "本番モードを始める" }).click();
+  await expect(page).toHaveURL(/\/interview\?.*companyId=1/);
+
+  await page.goto("/");
+  await page.getByRole("link", { name: "練習モードを始める" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=practice$/);
+  await expect(
+    page.getByRole("heading", { name: "練習モードの設定" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("spinbutton", { name: "最大ターン数" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "練習モードを始める" }).click();
+  await expect(page).toHaveURL(/\/practice$/);
+  await page.getByRole("link", { name: "設定に戻る" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=practice$/);
+
+  await page.goto("/practice/setup?mode=invalid");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
+});
+
+test("評価の再挑戦は本番設定、モード未確定の履歴0件導線はホームを開く", async ({
+  page,
+}) => {
+  await page.goto("/evaluations/detail?id=87");
+  await page.getByRole("link", { name: "再挑戦する" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+
+  await page.route("http://localhost:8000/evaluations", async (route) => {
+    if (route.request().method() === "GET") {
+      return fulfillJson(route, { evaluations: [] });
+    }
+    return route.fallback();
+  });
+  await page.goto("/evaluations");
+  await page.getByRole("link", { name: "面接・練習を始める" }).click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("静的な詳細 URL から企業編集と評価結果を表示できる", async ({ page }) => {
@@ -310,7 +395,7 @@ test("S-05〜S-07で応募企業情報を6項目として表示・検証・編�
   await expect(page.getByText("企業名", { exact: true })).toBeVisible();
   await expect(page.getByText("企業名 / 職種", { exact: true })).toHaveCount(0);
 
-  await page.goto("/practice/setup");
+  await page.goto("/practice/setup?mode=interview");
   await expect(
     page.getByText("募集要項 / 志望動機 / 経歴", { exact: true }),
   ).toBeVisible();
@@ -502,10 +587,12 @@ test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡
 });
 
 test("設定画面で最大ターン数を1〜25の整数として設定できる", async ({ page }) => {
-  await page.goto("/practice/setup");
+  await page.goto("/practice/setup?mode=interview");
 
   const input = page.getByRole("spinbutton", { name: "最大ターン数" });
-  const startButton = page.getByRole("button", { name: "開始する" });
+  const startButton = page.getByRole("button", {
+    name: "本番モードを始める",
+  });
   await expect(input).toHaveValue("10");
 
   await page.getByRole("button", { name: "最大ターン数を1減らす" }).click();

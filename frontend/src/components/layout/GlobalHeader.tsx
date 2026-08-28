@@ -9,13 +9,13 @@ import { cn } from "@/lib/cn";
 /**
  * ナビ4項目（共通仕様 4.1）。
  * S-07（/companies/...）は「応募先企業」、S-14（/evaluations/detail）は「履歴」を現在地とする。
- * 練習モード（S-09）へはナビから直接入れない。
+ * 「練習の設定」はモード未確定のためホームを開き、S-05 / S-09 へは直接入れない。
  */
 const NAV_ITEMS = [
-  { label: "ホーム", href: "/" },
-  { label: "応募先企業", href: "/companies" },
-  { label: "履歴", href: "/evaluations" },
-  { label: "練習の設定", href: "/practice/setup" },
+  { label: "ホーム", href: "/", tracksCurrent: true },
+  { label: "応募先企業", href: "/companies", tracksCurrent: true },
+  { label: "履歴", href: "/evaluations", tracksCurrent: true },
+  { label: "練習の設定", href: "/", tracksCurrent: false },
 ] as const;
 
 function isCurrent(href: string, pathname: string): boolean {
@@ -42,10 +42,11 @@ export function GlobalHeader() {
         </Link>
         <nav className="flex items-center gap-[26px] self-stretch text-body-sm">
           {NAV_ITEMS.map((item) => {
-            const current = isCurrent(item.href, pathname);
+            const current =
+              item.tracksCurrent && isCurrent(item.href, pathname);
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
                 aria-current={current ? "page" : undefined}
                 className={cn(

@@ -90,4 +90,17 @@ describe("HomePage のフィラー表示", () => {
     expect(row).toHaveTextContent("— / 計測対象外");
     expect(scoreBar(row)).toBeEmptyDOMElement();
   });
+
+  it("本番モードと練習モードを固定する2つの開始導線を表示する", async () => {
+    mocks.listEvaluations.mockResolvedValue([]);
+
+    render(<HomePage />);
+
+    expect(
+      await screen.findByRole("link", { name: "本番モードを始める" }),
+    ).toHaveAttribute("href", "/practice/setup?mode=interview");
+    expect(
+      screen.getByRole("link", { name: "練習モードを始める" }),
+    ).toHaveAttribute("href", "/practice/setup?mode=practice");
+  });
 });

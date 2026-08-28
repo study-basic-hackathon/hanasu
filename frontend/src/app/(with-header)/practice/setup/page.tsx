@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Chip } from "@/components/ui/Chip";
 import { filledSections } from "@/lib/application";
 import { cn } from "@/lib/cn";
 import { listCompanies, type Company } from "@/lib/company-api";
@@ -48,13 +47,33 @@ function RadioMark({ selected }: { selected: boolean }) {
 }
 
 /**
- * S-05 練習の設定。
+ * S-05 本番・練習モードの設定。
  * 選んだ内容はサーバーに保存せず、S-08 / S-09 へ引き渡す（ADR-0008）。
  * 本番モードの選択内容はクエリ文字列で S-08 へ引き渡す。
  */
 export default function PracticeSetupPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageContainer width={960} className="text-body-sm text-ink-sub">
+          設定を読み込んでいます。
+        </PageContainer>
+      }
+    >
+      <PracticeSetupContent />
+    </Suspense>
+  );
+}
+
+function PracticeSetupContent() {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("interview");
+  const searchParams = useSearchParams();
+  const modeValues = searchParams.getAll("mode");
+  const modeValue = modeValues.length === 1 ? modeValues[0] : null;
+  const mode: Mode | null =
+    modeValue === "interview" || modeValue === "practice"
+      ? modeValue
+      : null;
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     DEFAULT_READ_ALOUD_MODE,
@@ -69,6 +88,11 @@ export default function PracticeSetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mode === null) router.replace("/");
+  }, [mode, router]);
+
+  useEffect(() => {
+    if (mode === null) return;
     const controller = new AbortController();
     listCompanies(controller.signal)
       .then((loaded) => {
@@ -82,9 +106,19 @@ export default function PracticeSetupPage() {
         }
       });
     return () => controller.abort();
-  }, []);
+  }, [mode]);
+
+  if (mode === null) {
+    return (
+      <PageContainer width={960} className="text-body-sm text-ink-sub">
+        ホームへ戻っています。
+      </PageContainer>
+    );
+  }
 
   const isPracticeMode = mode === "practice";
+  const setupPath = `/practice/setup?mode=${mode}`;
+  const encodedSetupPath = encodeURIComponent(setupPath);
   const maxTurns = parseMaxTurns(maxTurnsInput);
   const maxTurnsError =
     maxTurns === null
@@ -109,68 +143,13 @@ export default function PracticeSetupPage() {
   return (
     <PageContainer width={960} className="flex flex-col gap-[22px]">
       <div className="flex flex-col gap-1.5">
-        <span className="text-label text-ink-muted">ホーム / 練習</span>
-        <h1 className="text-heading font-bold">練習の設定</h1>
+        <span className="text-label text-ink-muted">
+          ホーム / {isPracticeMode ? "練習モード" : "本番モード"}
+        </span>
+        <h1 className="text-heading font-bold">
+          {isPracticeMode ? "練習モードの設定" : "本番モードの設定"}
+        </h1>
       </div>
-
-      <Card className="flex flex-col gap-3.5 px-[26px] py-6">
-        <h2 className="text-card-sm font-bold">モード</h2>
-        <div className="grid grid-cols-2 gap-3.5">
-          <button
-            type="button"
-            aria-pressed={!isPracticeMode}
-            onClick={() => setMode("interview")}
-            className={cn(
-              "flex gap-3 rounded-[5px] px-[18px] py-4 text-left",
-              isPracticeMode
-                ? "border border-line-strong bg-surface"
-                : "border-2 border-accent bg-accent-soft",
-            )}
-          >
-            <span className="mt-0.5">
-              <RadioMark selected={!isPracticeMode} />
-            </span>
-            <span className="flex flex-col gap-1">
-              <span className="text-body font-medium">本番モード</span>
-              <span className="text-note leading-[1.7] text-ink-sub">
-                AI 面接官と連続した会話で模擬面接を行う
-              </span>
-            </span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={isPracticeMode}
-            onClick={() => setMode("practice")}
-            className={cn(
-              "flex gap-3 rounded-[5px] px-[18px] py-4 text-left",
-              isPracticeMode
-                ? "border-2 border-accent bg-accent-soft"
-                : "border border-line-strong bg-surface",
-            )}
-          >
-            <span className="mt-0.5">
-              <RadioMark selected={isPracticeMode} />
-            </span>
-            <span className="flex flex-col gap-1">
-              <span
-                className={cn(
-                  "flex items-center gap-2 text-body font-medium",
-                  !isPracticeMode && "text-ink-label",
-                )}
-              >
-                練習モード
-                {/* 練習モードは画面のモックだけを作る（画面一覧 3章） */}
-                <Chip className="border-none bg-[#eef1f3] text-[10px] text-ink-sub">
-                  モック
-                </Chip>
-              </span>
-              <span className="text-note leading-[1.7] text-ink-sub">
-                弱点ごとの個別トレーニングを選ぶ
-              </span>
-            </span>
-          </button>
-        </div>
-      </Card>
 
       <div className="grid grid-cols-2 gap-[22px]">
         <Card className="flex flex-col gap-3.5 px-[26px] py-6">
@@ -308,7 +287,7 @@ export default function PracticeSetupPage() {
         <div className="flex items-center justify-between border-b border-divider px-[26px] py-5">
           <h2 className="text-card-sm font-bold">対象企業</h2>
           <Link
-            href="/companies/new?from=/practice/setup"
+            href={`/companies/new?from=${encodedSetupPath}`}
             className="rounded-control border border-line-strong px-3 py-[7px] text-label hover:bg-canvas"
           >
             企業を追加
@@ -327,7 +306,7 @@ export default function PracticeSetupPage() {
             <p className="text-body-sm text-ink-sub">
               登録された企業がありません。企業を追加すると、その内容をもとに質問が作られます。
             </p>
-            <Link href="/companies/new?from=/practice/setup" className={buttonClassName("primary", "sm")}>
+            <Link href={`/companies/new?from=${encodedSetupPath}`} className={buttonClassName("primary", "sm")}>
               企業を追加
             </Link>
           </div>
@@ -375,7 +354,7 @@ export default function PracticeSetupPage() {
                     </span>
                   </button>
                   <Link
-                    href={`/companies/edit?id=${company.id}&from=/practice/setup`}
+                    href={`/companies/edit?id=${company.id}&from=${encodedSetupPath}`}
                     className="text-note text-accent hover:underline"
                   >
                     編集
@@ -393,7 +372,7 @@ export default function PracticeSetupPage() {
           先にチュートリアルを試す
         </Link>
         <div className="flex items-center gap-3">
-          {/* 練習モードを選んでいるあいだは出さない（S-05 5章） */}
+          {/* 練習モード固定の画面では出さない（S-05 5章） */}
           {!isPracticeMode && (
             <span className="text-label text-ink-muted">
               {maxTurns === null
@@ -420,7 +399,9 @@ export default function PracticeSetupPage() {
             }}
             className="px-[34px]"
           >
-            開始する
+            {isPracticeMode
+              ? "練習モードを始める"
+              : "本番モードを始める"}
           </Button>
         </div>
       </div>

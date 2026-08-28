@@ -176,7 +176,7 @@ function ResultView({ evaluation }: { evaluation: Evaluation }) {
         </div>
         <div className="flex gap-2.5">
           <Link
-            href="/practice/setup"
+            href="/practice/setup?mode=interview"
             className="grid h-10 place-items-center rounded-control bg-surface px-5 text-body-sm font-medium text-ink hover:bg-surface/90"
           >
             再挑戦する
