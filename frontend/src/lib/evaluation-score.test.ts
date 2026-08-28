@@ -47,7 +47,7 @@ describe("buildEvaluationScores", () => {
     ).toEqual({});
   });
 
-  it("欠測回答を除外し、計測できた音声回答だけを指標別に合算する", () => {
+  it("文字回答と欠測回答を除外し、計測できた音声回答だけを指標別に合算する", () => {
     expect(
       buildEvaluationScores([
         {
@@ -66,7 +66,6 @@ describe("buildEvaluationScores", () => {
         {
           role: "user",
           content: "文字回答",
-          filler_count: 20,
         },
         {
           role: "user",

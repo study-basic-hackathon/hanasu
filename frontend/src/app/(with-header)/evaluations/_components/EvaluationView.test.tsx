@@ -71,6 +71,9 @@ describe("EvaluationView のフィラー表示", () => {
     const card = fillerCard();
     expect(within(card).getByText("—")).toBeVisible();
     expect(within(card).getByText("計測対象外")).toBeVisible();
+    expect(
+      within(card).getByText("計測できる音声回答がありません。"),
+    ).toBeVisible();
     expect(scoreBar(card)).toBeEmptyDOMElement();
   });
 

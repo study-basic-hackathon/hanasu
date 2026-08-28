@@ -35,7 +35,6 @@ import {
   TRANSCRIPT_DISPLAY_MODE_LABEL,
 } from "@/lib/domain";
 import {
-  countFillers,
   FIRST_QUESTION,
   resolveMaxTurns,
   resolveReadAloudMode,
@@ -380,14 +379,18 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       const answer: ChatTurn = {
         role: "user",
         content,
-        raw_content: detail?.rawContent,
         time: nowClock(),
-        audio_seconds: detail?.audioSeconds,
-        audio_duration_ms: detail?.audioDurationMs,
-        character_count: detail?.characterCount,
-        filler_count: detail?.fillerCount ?? countFillers(content),
-        filler_count_per_min: detail?.fillerCountPerMin,
-        chars_per_min: detail?.charsPerMin,
+        ...(detail
+          ? {
+              raw_content: detail.rawContent,
+              audio_seconds: detail.audioSeconds,
+              audio_duration_ms: detail.audioDurationMs,
+              character_count: detail.characterCount,
+              filler_count: detail.fillerCount,
+              filler_count_per_min: detail.fillerCountPerMin,
+              chars_per_min: detail.charsPerMin,
+            }
+          : {}),
       };
       const nextTurns = [...turns, answer];
       setTurns(nextTurns);
