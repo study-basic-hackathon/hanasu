@@ -19,13 +19,14 @@
 | 1 | `POST /token` | 認証（ID / パスワード → JWT アクセストークン） | 作る |
 | 2 | `GET /users/me` | 認証中のユーザーを返す | 作る |
 | 3 | `GET /companies` / `POST /companies` / `GET /companies/{company_id}` / `PUT /companies/{company_id}` / `DELETE /companies/{company_id}` | 応募情報の登録・参照・更新・削除 | 作る |
-| 4 | `POST /interviews/start` | 最初の質問を生成する | **任意。** 作らない場合はフロントが固定文字列を持つ |
-| 5 | `POST /interviews/stt` | 文字起こし + フィラー数 + 話速 | 作る |
-| 6 | `POST /interviews/chat` | 次の質問を生成する | 作る |
-| 7 | `POST /interviews/tts` | 面接官の発言を音声化する | **任意。** 作らない場合は画面に文字表示するだけでよい |
-| 8 | `POST /evaluations` | 評価を実行する（非同期） | 作る |
-| 9 | `GET /evaluations/{evaluation_id}` | 評価結果を取得する | 作る |
-| 10 | `GET /evaluations` | 評価履歴を一覧する | 作る |
+| 4 | `POST /job-postings/summary` | 募集要項 URL から要約を生成する | 作る |
+| 5 | `POST /interviews/start` | 最初の質問を生成する | **任意。** 作らない場合はフロントが固定文字列を持つ |
+| 6 | `POST /interviews/stt` | 文字起こし + フィラー数 + 話速 | 作る |
+| 7 | `POST /interviews/chat` | 次の質問を生成する | 作る |
+| 8 | `POST /interviews/tts` | 面接官の発言を音声化する | **任意。** 作らない場合は画面に文字表示するだけでよい |
+| 9 | `POST /evaluations` | 評価を実行する（非同期） | 作る |
+| 10 | `GET /evaluations/{evaluation_id}` | 評価結果を取得する | 作る |
+| 11 | `GET /evaluations` | 評価履歴を一覧する | 作る |
 
 ## 3. 認証
 
@@ -83,9 +84,10 @@ CompanyInput と Company が扱う応募情報は次の6項目である。画面
 | `motivation` | `string` | **必須** | `string \| null` | 4,000文字 | 空文字・空白のみは不可。Company の `null` は既存データとの互換性のため許容 |
 | `resume` | `string \| null` | 任意 | `string \| null` | 10,000文字 | 経歴・実績 |
 | `note` | `string \| null` | 任意 | `string \| null` | 2,000文字 | 備考 |
-| `job_summary` | `string \| null` | 任意 | `string \| null` | 4,000文字 | 募集要項の要約 |
+| `job_summary` | `string \| null` | 任意 | `string \| null` | 4,000文字 | 募集要項の要約。最大長は S-07 だけが検査する |
 
 - 最大長はバイト数ではなく、**入力の前後の空白を除いた文字数**で判定する
+- **`job_summary` の 4,000文字上限は [S-07](../frontend/01_design/screens/S-07_応募企業情報_登録編集.md) のフロントエンド入力制約である。** `POST /companies` と `PUT /companies/{company_id}` のバックエンドは `job_summary` の最大長を検査せず、4,000文字を超える値も入出力できる
 - `company_url` / `resume` / `note` / `job_summary` は、CompanyInput でキー省略または `null` を許容する。空文字・空白のみは `null` に正規化する
 - Company は6項目のキーを常に含み、任意項目の未入力は `null` で返す
 - `id` と `created_at` は Company のレスポンス専用メタデータであり、CompanyInput には含めない。S-06 / S-07 の表示項目にも数えない
@@ -125,7 +127,52 @@ CompanyInput と Company が扱う応募情報は次の6項目である。画面
 | 認証できない | `401` |
 | Read / Update / Delete で企業 ID が存在しない | `404` |
 | Create / Update で企業名が重複する | `409` |
-| CompanyInput の必須・型・形式・最大長の制約に違反する | `422` |
+| CompanyInput の必須・型・形式、または `job_summary` 以外の最大長の制約に違反する | `422` |
+
+### 4.5 `POST /job-postings/summary` — 募集要項の要約
+
+認証済みユーザーが募集要項 URL を1件送信し、取得・本文抽出・AI要約の完了を待って要約を受け取る。
+
+```json
+// リクエスト
+{ "company_url": "https://example.com/jobs/123" }
+```
+
+| 項目 | 型 | 必須 | 制約 |
+|---|---|---|---|
+| `company_url` | `string` | **必須** | 2,048文字以内の有効な HTTP(S) URL |
+
+```json
+// 200 レスポンス
+{ "summary": "自社サービスのバックエンド開発を担当する募集です。" }
+```
+
+- `summary` は空でない文字列とし、S-07 の `job_summary` へ反映する
+- **要約 API は `summary` の最大長を検査せず、切り詰めも行わない。** S-07 が `job_summary` の 4,000文字上限を検査する
+- この API は要約を保存しない。保存は S-07 が従来どおり `POST /companies` または `PUT /companies/{company_id}` の `job_summary` で行う
+- JavaScript の実行、ログイン、Cookie、CAPTCHA が必要なページと、HTML 以外のコンテンツは対象外とする
+- 接続先は公開 HTTP(S) URL に限る。localhost、認証情報を含む URL、プライベート・ループバック・リンクローカルアドレスと、それらへのリダイレクトは拒否する
+
+失敗時は次の形式で返す。`code` はフロントエンドの分岐用の固定値、`message` は利用者向けの文言である。
+
+```json
+{
+  "detail": {
+    "code": "invalid_url",
+    "message": "有効なHTTP(S) URLを指定してください。"
+  }
+}
+```
+
+| 状況 | HTTP ステータス | `detail.code` | `detail.message` |
+|---|---:|---|---|
+| 認証できない | `401` | — | 既存の認証エラーを返す |
+| `company_url` が未指定、上限超過、または HTTP(S) URL でない | `422` | `invalid_url` | `有効なHTTP(S) URLを指定してください。` |
+| 禁止した接続先またはリダイレクト先である | `422` | `url_not_allowed` | `指定されたURLにはアクセスできません。` |
+| タイムアウト、DNS・接続失敗、取得先のエラー応答で取得できない | `502` | `fetch_failed` | `募集要項を取得できませんでした。` |
+| HTML 以外、または取得サイズの安全上限を超える | `422` | `unsupported_content` | `このページは募集要項の要約に対応していません。` |
+| HTML から要約に使える本文を抽出できない | `422` | `extraction_failed` | `募集要項の本文を抽出できませんでした。` |
+| AI 呼び出しの失敗、または応答が空 | `503` | `summary_failed` | `募集要項の要約を生成できませんでした。` |
 
 ## 5. 面接と評価
 
