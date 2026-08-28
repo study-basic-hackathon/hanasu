@@ -82,6 +82,7 @@ export type ChatTurn = {
   audio_duration_ms?: number;
   character_count?: number;
   filler_count?: number;
+  filler_count_per_min?: number;
   chars_per_min?: number;
 };
 

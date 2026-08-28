@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import type { AnswerMethod } from "@/lib/domain";
 import { formatElapsed } from "@/lib/format";
@@ -19,6 +20,7 @@ export type AnswerDetail = {
   audioDurationMs: number;
   characterCount: number;
   fillerCount: number;
+  fillerCountPerMin: number;
   charsPerMin: number;
 };
 
@@ -43,8 +45,26 @@ function initialLevels(): number[] {
 }
 
 function preferredMimeType(): string | undefined {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm"];
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+  ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function transcriptionFailureMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return "サインインの有効期限が切れました。もう一度サインインしてください。";
+    }
+    if (error.status === 413) {
+      return "録音データが大きすぎます。短く区切ってもう一度お試しください。";
+    }
+  }
+  return "聞き取れませんでした。もう一度お話しください。";
 }
 
 export function AnswerPanel({
@@ -147,7 +167,10 @@ export function AnswerPanel({
   async function startRecording() {
     setNotice(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setNotice("このブラウザでは音声録音を利用できません。文字入力で回答してください。");
+      setNotice(
+        "マイクを使えません。ブラウザの設定で許可するか、文字入力で回答してください。",
+      );
+      onChangeAnswerMethod("text");
       return;
     }
 
@@ -201,12 +224,13 @@ export function AnswerPanel({
               audioDurationMs: result.duration_ms,
               characterCount: result.chars,
               fillerCount: result.filler_count,
+              fillerCountPerMin: result.filler_count_per_min,
               charsPerMin: result.chars_per_min,
             });
           })
-          .catch(() => {
+          .catch((error: unknown) => {
             setRecording("idle");
-            setNotice("文字起こしに失敗しました。時間をおいてもう一度お試しください。");
+            setNotice(transcriptionFailureMessage(error));
           });
       });
 
@@ -219,7 +243,10 @@ export function AnswerPanel({
     } catch {
       releaseAudio();
       setRecording("idle");
-      setNotice("マイクを利用できません。ブラウザの許可設定を確認してください。");
+      setNotice(
+        "マイクを使えません。ブラウザの設定で許可するか、文字入力で回答してください。",
+      );
+      onChangeAnswerMethod("text");
     }
   }
 
@@ -237,7 +264,10 @@ export function AnswerPanel({
               type="button"
               aria-pressed={answerMethod === method}
               disabled={isBusy}
-              onClick={() => onChangeAnswerMethod(method)}
+              onClick={() => {
+                setNotice(null);
+                onChangeAnswerMethod(method);
+              }}
               className={cn(
                 "h-8 px-[18px] text-label disabled:cursor-not-allowed",
                 answerMethod === method
@@ -326,7 +356,6 @@ export function AnswerPanel({
               </>
             )}
           </div>
-          {notice && <p role="alert" className="text-note text-danger">{notice}</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-3 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
@@ -352,6 +381,7 @@ export function AnswerPanel({
           </div>
         </div>
       )}
+      {notice && <p role="alert" className="text-note text-danger">{notice}</p>}
     </div>
   );
 }

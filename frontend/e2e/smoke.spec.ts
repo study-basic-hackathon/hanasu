@@ -121,6 +121,104 @@ function fulfillJson(route: Route, body: unknown, status = 200) {
   });
 }
 
+async function installFakeRecorder(page: Page) {
+  await page.addInitScript(() => {
+    class FakeMediaRecorder extends EventTarget {
+      static isTypeSupported(type: string) {
+        return type === "audio/webm;codecs=opus";
+      }
+
+      readonly mimeType: string;
+      state: RecordingState = "inactive";
+
+      constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+        super();
+        this.mimeType = options?.mimeType ?? "audio/webm";
+      }
+
+      start() {
+        this.state = "recording";
+      }
+
+      stop() {
+        if (this.state !== "recording") return;
+        this.state = "inactive";
+        const data = new Blob(["synthetic recorded audio"], {
+          type: this.mimeType,
+        });
+        this.dispatchEvent(new BlobEvent("dataavailable", { data }));
+        this.dispatchEvent(new Event("stop"));
+      }
+    }
+
+    class FakeAudioContext {
+      createAnalyser() {
+        return {
+          fftSize: 0,
+          frequencyBinCount: 32,
+          getByteFrequencyData(data: Uint8Array) {
+            data.fill(16);
+          },
+        };
+      }
+
+      createMediaStreamSource() {
+        return { connect() {} };
+      }
+
+      close() {
+        return Promise.resolve();
+      }
+    }
+
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      value: FakeMediaRecorder,
+    });
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      value: FakeAudioContext,
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({
+          getTracks: () => [{ stop() {} }],
+        }),
+      },
+    });
+  });
+}
+
+async function mockStt(page: Page) {
+  let requestCount = 0;
+  await page.route("http://localhost:8000/interviews/stt", async (route) => {
+    requestCount += 1;
+    const request = route.request();
+    const headers = request.headers();
+    const multipart = request.postDataBuffer()?.toString("utf8") ?? "";
+
+    expect(headers.authorization).toBe("Bearer e2e-token");
+    expect(headers["content-type"]).toMatch(
+      /^multipart\/form-data; boundary=/,
+    );
+    expect(multipart).toContain('name="audio"');
+    expect(multipart).toContain('filename="answer.webm"');
+    expect(multipart).toContain("Content-Type: audio/webm;codecs=opus");
+
+    return fulfillJson(route, {
+      raw_transcript: "%えー% 回答です。",
+      clean_transcript: "回答です。",
+      filler_count: 1,
+      filler_count_per_min: 30,
+      duration_ms: 2_000,
+      chars: 5,
+      chars_per_min: 150,
+    });
+  });
+  return () => requestCount;
+}
+
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
@@ -173,6 +271,75 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
   await expect(page.getByText("計測対象外")).toBeVisible();
+});
+
+test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話を使う", async ({
+  page,
+}) => {
+  await installFakeRecorder(page);
+  const sttRequestCount = await mockStt(page);
+  await page.route("http://localhost:8000/interviews/chat", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.history.at(-1)).toEqual({
+      role: "user",
+      content: "%えー% 回答です。",
+    });
+    return fulfillJson(route, {
+      text: "経験から学んだことを教えてください。",
+    });
+  });
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=voice&maxTurns=2",
+  );
+
+  await page.getByRole("button", { name: "回答を録音する" }).click();
+  await page.waitForTimeout(1_100);
+  await page
+    .getByRole("button", { name: "録音を停止して送信する" })
+    .click();
+
+  await expect(page.getByText("回答です。", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("経験から学んだことを教えてください。"),
+  ).toBeVisible();
+  expect(sttRequestCount()).toBe(1);
+});
+
+test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡す", async ({
+  page,
+}) => {
+  await installFakeRecorder(page);
+  const sttRequestCount = await mockStt(page);
+  await page.route("http://localhost:8000/evaluations", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+
+    expect(route.request().postDataJSON()).toMatchObject({
+      company_id: null,
+      answer_method: "voice",
+      turn_count: 1,
+      turns: [
+        { role: "assistant", content: "1分で自己紹介してください。" },
+        { role: "user", content: "%えー% 回答です。" },
+      ],
+      scores: {
+        speaking_speed: { value: 150, unit: "文字/分" },
+        filler: { value: 1, unit: "回", value_per_minute: 30 },
+      },
+    });
+    return fulfillJson(route, { evaluation_id: 88 }, 202);
+  });
+  await page.goto("/tutorial");
+
+  await page.getByRole("button", { name: "回答を録音する" }).click();
+  await page.waitForTimeout(1_100);
+  await page
+    .getByRole("button", { name: "録音を停止して送信する" })
+    .click();
+
+  await expect(page).toHaveURL(
+    /\/evaluations\/detail\?id=88&from=interview$/,
+  );
+  expect(sttRequestCount()).toBe(1);
 });
 
 test("設定画面で最大ターン数を1〜25の整数として設定できる", async ({ page }) => {

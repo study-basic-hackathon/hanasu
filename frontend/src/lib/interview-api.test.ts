@@ -28,6 +28,7 @@ describe("interview-api", () => {
       raw_transcript: "えー、回答です。",
       clean_transcript: "回答です。",
       filler_count: 1,
+      filler_count_per_min: 30,
       duration_ms: 2_000,
       chars: 5,
       chars_per_min: 150,
@@ -46,8 +47,40 @@ describe("interview-api", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init?.method).toBe("POST");
     expect(init?.body).toBeInstanceOf(FormData);
-    expect((init?.body as FormData).get("audio")).toBeInstanceOf(File);
+    const audio = (init?.body as FormData).get("audio");
+    expect(audio).toBeInstanceOf(File);
+    expect(audio).toMatchObject({
+      name: "answer.webm",
+      type: "audio/webm",
+    });
+    expect(new Headers(init?.headers).get("Authorization")).toBe(
+      "Bearer jwt-token",
+    );
     expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("録音の MIME type に対応するファイル名で送る", async () => {
+    const transcription = {
+      raw_transcript: "回答です。",
+      clean_transcript: "回答です。",
+      filler_count: 0,
+      filler_count_per_min: 0,
+      duration_ms: 2_000,
+      chars: 5,
+      chars_per_min: 150,
+    };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(transcription), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await transcribeAudio(new Blob(["audio"], { type: "audio/mp4" }));
+
+    const audio = (fetchMock.mock.calls[0][1]?.body as FormData).get("audio");
+    expect(audio).toMatchObject({ name: "answer.m4a", type: "audio/mp4" });
   });
 
   it("質問強度・最大ターン数と未加工 STT テキストを chat API へ送る", async () => {
