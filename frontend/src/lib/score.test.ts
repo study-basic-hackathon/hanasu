@@ -5,7 +5,6 @@ import {
   SCORE_TEXT_CLASS,
   SPEAKING_SPEED_RANGE,
   scoreFillerRate,
-  scoreFillersPerAnswer,
   scoreLevel,
   scorePercent,
   scoreSpeakingSpeed,
@@ -34,27 +33,63 @@ describe("スコア表示の定数", () => {
   it("各レベルの色と話す速さの適正域を提供する", () => {
     expect(SCORE_TEXT_CLASS.good).toBe("text-accent");
     expect(SCORE_BAR_CLASS.improve).toBe("bg-danger");
-    expect(SPEAKING_SPEED_RANGE).toEqual({ min: 280, max: 320 });
+    expect(SPEAKING_SPEED_RANGE).toEqual({ min: 200, max: 250 });
   });
 });
 
-describe("暫定の定量スコア", () => {
+describe("scoreSpeakingSpeed", () => {
   it.each([
-    [280, 100],
-    [300, 100],
-    [320, 100],
-    [260, 90],
-    [340, 90],
-    [80, 0],
-    [520, 0],
-  ])("話速 %i 文字/分を %i 点にする", (value, expected) => {
+    [0, 0],
+    [100, 50],
+    [200, 100],
+    [250, 100],
+    [350, 70],
+    [400, 40],
+    [500, 10],
+  ])("基準点 %i 文字/分を %i 点にする", (value, expected) => {
     expect(scoreSpeakingSpeed(value)).toBe(expected);
   });
 
-  it("フィラーを0〜100点に収める", () => {
-    expect(scoreFillerRate(0)).toBe(100);
-    expect(scoreFillerRate(2)).toBe(70);
-    expect(scoreFillerRate(10)).toBe(0);
-    expect(scoreFillersPerAnswer(1.5)).toBe(70);
+  it.each([
+    [50, 25],
+    [150, 75],
+    [300, 85],
+    [375, 55],
+    [450, 25],
+    [101, 51],
+  ])("補間区間の %i 文字/分を %i 点にする", (value, expected) => {
+    expect(scoreSpeakingSpeed(value)).toBe(expected);
+  });
+
+  it("満点域と上下限の点数に固定する", () => {
+    expect(scoreSpeakingSpeed(-1)).toBe(0);
+    expect(scoreSpeakingSpeed(225)).toBe(100);
+    expect(scoreSpeakingSpeed(600)).toBe(10);
+  });
+});
+
+describe("scoreFillerRate", () => {
+  it.each([
+    [0, 100],
+    [2, 100],
+    [5, 50],
+    [10, 20],
+    [15, 0],
+  ])("基準点 %i 回/分を %i 点にする", (value, expected) => {
+    expect(scoreFillerRate(value)).toBe(expected);
+  });
+
+  it.each([
+    [3.5, 75],
+    [4, 67],
+    [7.5, 35],
+    [12.5, 10],
+  ])("補間区間の %i 回/分を %i 点にする", (value, expected) => {
+    expect(scoreFillerRate(value)).toBe(expected);
+  });
+
+  it("上下限の点数に固定する", () => {
+    expect(scoreFillerRate(1)).toBe(100);
+    expect(scoreFillerRate(20)).toBe(0);
   });
 });

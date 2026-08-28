@@ -26,39 +26,62 @@ export const SCORE_BAR_CLASS: Record<ScoreLevel, string> = {
   improve: "bg-danger",
 };
 
-/** 話す速さの適正域（S-14 4.3 / S-12） */
-export const SPEAKING_SPEED_RANGE = { min: 280, max: 320 } as const;
+/** 話す速さが100点となる範囲（評価仕様 4.3 / S-14 4.3 / S-12） */
+export const SPEAKING_SPEED_RANGE = { min: 200, max: 250 } as const;
 
 function normalizedScore(score: number): number {
   return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-/**
- * #57 確定までの暫定基準。
- * 適正域を100点とし、範囲から2文字/分離れるごとに1点減点する。
- */
+function interpolateScore(
+  value: number,
+  from: readonly [value: number, score: number],
+  to: readonly [value: number, score: number],
+): number {
+  const [fromValue, fromScore] = from;
+  const [toValue, toScore] = to;
+  return normalizedScore(
+    fromScore +
+      ((value - fromValue) * (toScore - fromScore)) /
+        (toValue - fromValue),
+  );
+}
+
+/** 評価仕様 4.3 の基準点間を線形補間して話速を点数化する。 */
 export function scoreSpeakingSpeed(charsPerMinute: number): number {
-  const { min, max } = SPEAKING_SPEED_RANGE;
-  const distance =
-    charsPerMinute < min
-      ? min - charsPerMinute
-      : charsPerMinute > max
-        ? charsPerMinute - max
-        : 0;
-  return normalizedScore(100 - distance / 2);
+  if (charsPerMinute <= 0) return 0;
+  if (charsPerMinute < 100) {
+    return interpolateScore(charsPerMinute, [0, 0], [100, 50]);
+  }
+  if (charsPerMinute < SPEAKING_SPEED_RANGE.min) {
+    return interpolateScore(charsPerMinute, [100, 50], [200, 100]);
+  }
+  if (charsPerMinute <= SPEAKING_SPEED_RANGE.max) return 100;
+  if (charsPerMinute < 350) {
+    return interpolateScore(charsPerMinute, [250, 100], [350, 70]);
+  }
+  if (charsPerMinute < 400) {
+    return interpolateScore(charsPerMinute, [350, 70], [400, 40]);
+  }
+  if (charsPerMinute < 500) {
+    return interpolateScore(charsPerMinute, [400, 40], [500, 10]);
+  }
+  return 10;
 }
 
-/** #57 確定までの暫定基準。1回/分ごとに15点減点する。 */
+/** 評価仕様 4.2 の基準点間を線形補間して毎分フィラー数を点数化する。 */
 export function scoreFillerRate(fillersPerMinute: number): number {
-  return normalizedScore(100 - fillersPerMinute * 15);
-}
-
-/**
- * 文字入力を含み「回/分」を出せない場合の暫定基準。
- * 1回答あたり1回ごとに20点減点する。
- */
-export function scoreFillersPerAnswer(fillersPerAnswer: number): number {
-  return normalizedScore(100 - fillersPerAnswer * 20);
+  if (fillersPerMinute <= 2) return 100;
+  if (fillersPerMinute < 5) {
+    return interpolateScore(fillersPerMinute, [2, 100], [5, 50]);
+  }
+  if (fillersPerMinute < 10) {
+    return interpolateScore(fillersPerMinute, [5, 50], [10, 20]);
+  }
+  if (fillersPerMinute < 15) {
+    return interpolateScore(fillersPerMinute, [10, 20], [15, 0]);
+  }
+  return 0;
 }
 
 /** バーの長さはスコアをそのまま百分率にする（72点 → 72%） */
