@@ -119,6 +119,7 @@ describe("AnswerPanel の音声回答", () => {
   function renderPanel(options: {
     onSubmit?: (content: string, detail?: AnswerDetail) => void;
     onChangeAnswerMethod?: (method: "voice" | "text") => void;
+    disabled?: boolean;
   } = {}) {
     const onSubmit = options.onSubmit ?? vi.fn();
     const onChangeAnswerMethod = options.onChangeAnswerMethod ?? vi.fn();
@@ -127,6 +128,7 @@ describe("AnswerPanel の音声回答", () => {
         answerMethod="voice"
         onChangeAnswerMethod={onChangeAnswerMethod}
         onSubmit={onSubmit}
+        disabled={options.disabled}
       />,
     );
     return { onSubmit, onChangeAnswerMethod };
@@ -214,6 +216,22 @@ describe("AnswerPanel の音声回答", () => {
     expect(onChangeAnswerMethod).toHaveBeenCalledWith("text");
     expect(mocks.transcribeAudio).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("無効時は回答方式の切替と録音開始を受け付けない", () => {
+    const { onChangeAnswerMethod } = renderPanel({ disabled: true });
+
+    expect(screen.getByRole("button", { name: "音声で回答" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "文字入力で回答" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "回答を録音する" }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "文字入力で回答" }));
+    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
+
+    expect(onChangeAnswerMethod).not.toHaveBeenCalled();
+    expect(getUserMedia).not.toHaveBeenCalled();
   });
 
   it.each([
