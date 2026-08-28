@@ -5,17 +5,32 @@ export type Transcription = {
   raw_transcript: string;
   clean_transcript: string;
   filler_count: number;
+  filler_count_per_min: number;
   duration_ms: number;
   chars: number;
   chars_per_min: number;
 };
+
+const AUDIO_EXTENSION_BY_MIME: Record<string, string> = {
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+};
+
+function recordingFileName(audio: Blob): string {
+  const mimeType = audio.type.toLowerCase().split(";", 1)[0];
+  return `answer.${AUDIO_EXTENSION_BY_MIME[mimeType] ?? "webm"}`;
+}
 
 export async function transcribeAudio(
   audio: Blob,
   signal?: AbortSignal,
 ): Promise<Transcription> {
   const form = new FormData();
-  form.set("audio", audio, "answer.webm");
+  form.set("audio", audio, recordingFileName(audio));
   return apiRequest<Transcription>("/interviews/stt", {
     method: "POST",
     body: form,
