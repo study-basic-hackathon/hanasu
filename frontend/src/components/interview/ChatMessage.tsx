@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import type { ChatTurn } from "@/lib/domain";
+import type { ChatTurn, TranscriptDisplayMode } from "@/lib/domain";
 import {
   SCORE_TEXT_CLASS,
   SPEAKING_SPEED_RANGE,
@@ -18,16 +18,22 @@ export type SpeechStatus = "idle" | "loading" | "playing" | "error";
  */
 export function ChatMessage({
   turn,
+  transcriptDisplayMode = "clean",
   speechStatus,
   onToggleSpeech,
   speechEnabled = true,
 }: {
   turn: ChatTurn;
+  transcriptDisplayMode?: TranscriptDisplayMode;
   speechStatus: SpeechStatus;
   onToggleSpeech: () => void;
   speechEnabled?: boolean;
 }) {
   const isSelf = turn.role === "user";
+  const content =
+    transcriptDisplayMode === "raw" && isVoiceAnswer(turn)
+      ? (turn.raw_content ?? turn.content)
+      : turn.content;
 
   return (
     <div className={cn("flex gap-3.5", isSelf && "justify-end")}>
@@ -46,7 +52,7 @@ export function ChatMessage({
               : "rounded-[2px_8px_8px_8px] border border-line bg-surface",
           )}
         >
-          {turn.content}
+          {content}
         </div>
         <div className="flex flex-col items-end gap-1 text-note text-ink-muted">
           {isSelf ? (
@@ -69,10 +75,7 @@ export function ChatMessage({
 }
 
 function UserAnswerDetails({ turn }: { turn: ChatTurn }) {
-  const isVoiceAnswer =
-    turn.audio_seconds !== undefined || turn.audio_duration_ms !== undefined;
-
-  if (!isVoiceAnswer) {
+  if (!isVoiceAnswer(turn)) {
     return turn.time ? <span>{turn.time}</span> : null;
   }
 
@@ -120,6 +123,13 @@ function UserAnswerDetails({ turn }: { turn: ChatTurn }) {
         <p className="text-danger">次はもう少しゆっくり話しましょう</p>
       )}
     </>
+  );
+}
+
+function isVoiceAnswer(turn: ChatTurn): boolean {
+  return (
+    turn.role === "user" &&
+    (turn.audio_seconds !== undefined || turn.audio_duration_ms !== undefined)
   );
 }
 
