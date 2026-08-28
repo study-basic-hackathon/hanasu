@@ -62,15 +62,14 @@ async function mockApi(page: Page) {
       return fulfillJson(route, { text: "経験から学んだことを教えてください。" });
     }
     if (pathname === "/evaluations" && request.method() === "POST") {
-      expect(request.postDataJSON()).toMatchObject({
+      const body = request.postDataJSON();
+      expect(body).toMatchObject({
         company_id: 1,
         question_strength: "hard",
         answer_method: "text",
         turn_count: 1,
-        scores: {
-          filler: { score: 80, value: 1, unit: "回" },
-        },
       });
+      expect(body.scores).toEqual({});
       return fulfillJson(route, { evaluation_id: 88 }, 202);
     }
     if (pathname === "/evaluations" && request.method() === "GET") {

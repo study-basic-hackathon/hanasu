@@ -79,7 +79,7 @@ export async function getEvaluation(
 export type CreateEvaluationInput = {
   companyId: number | null;
   turns: ChatTurn[];
-  scores: EvaluationQuantitativeScores;
+  scores: Partial<EvaluationQuantitativeScores>;
   questionStrength: QuestionStrength | null;
   answerMethod: AnswerMethod;
 };
