@@ -320,15 +320,42 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   );
 
   await page.getByRole("link", { name: "企業を追加" }).click();
-  await page.getByRole("link", { name: "取り消す" }).click();
+  const newCompanyCancel = page.getByRole("link", { name: "取り消す" });
+  await expect(newCompanyCancel).toHaveAttribute(
+    "href",
+    "/practice/setup?mode=interview",
+  );
+  await newCompanyCancel.click();
   await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
 
   await page.getByRole("link", { name: "編集" }).click();
-  await page.getByRole("link", { name: "取り消す" }).click();
+  const editCompanyCancel = page.getByRole("link", { name: "取り消す" });
+  await expect(editCompanyCancel).toHaveAttribute(
+    "href",
+    "/practice/setup?mode=interview",
+  );
+  await editCompanyCancel.click();
   await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
 
   await page.getByRole("button", { name: company.company_name }).click();
   await page.getByRole("button", { name: "本番モードを始める" }).click();
+  const startDialog = page.getByRole("dialog");
+  await expect(startDialog).toContainText(company.company_name);
+  await expect(startDialog).toContainText(/回答方式\s*音声/);
+  await expect(startDialog).toContainText(/質問の強度\s*標準/);
+  await expect(startDialog).toContainText(/最大ターン数\s*10 ターン/);
+  await expect(startDialog).toContainText(/読み上げモード\s*読み上げない/);
+  await startDialog.getByRole("button", { name: "取り消す" }).click();
+  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(
+    page.getByRole("button", { name: company.company_name }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "本番モードを始める" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "開始する" })
+    .click();
   await expect(page).toHaveURL(/\/interview\?.*companyId=1/);
 
   await page.goto("/");
@@ -610,6 +637,10 @@ test("設定画面で最大ターン数を1〜25の整数として設定でき�
   await input.fill("25");
   await expect(startButton).toBeEnabled();
   await startButton.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "開始する" })
+    .click();
 
   await expect(page).toHaveURL(/maxTurns=25/);
   await expect(page.getByText("ターン 1 / 25")).toBeVisible();
