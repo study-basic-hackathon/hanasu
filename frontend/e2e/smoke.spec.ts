@@ -510,7 +510,7 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
   await expect(page.getByText("計測対象外")).toHaveCount(2);
 });
 
-test("S-08 からホームへ戻ると評価を作成しない", async ({ page }) => {
+test("S-08 は回答前に確認と評価なしでホームへ戻れる", async ({ page }) => {
   let evaluationRequestCount = 0;
   page.on("request", (request) => {
     if (
@@ -523,9 +523,42 @@ test("S-08 からホームへ戻ると評価を作成しない", async ({ page }
   await page.goto(
     "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=2",
   );
+
+  await page.getByRole("button", { name: "ホーム" }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(evaluationRequestCount).toBe(0);
+});
+
+test("S-08 は回答後のホーム確認を取り消せ、続行しても評価を作成しない", async ({
+  page,
+}) => {
+  let evaluationRequestCount = 0;
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname === "/evaluations" &&
+      request.method() === "POST"
+    ) {
+      evaluationRequestCount += 1;
+    }
+  });
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=1",
+  );
   await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
   await page.getByRole("button", { name: "送信する" }).click();
-  await expect(page.getByText("経験から学んだことを教えてください。")).toBeVisible();
+  await expect(page.getByText("面接が終了しました。")).toBeVisible();
+
+  await page.getByRole("button", { name: "ホーム" }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "ホームに戻ると、この会話は失われます。評価は行われません。",
+  );
+  await page.getByRole("button", { name: "取り消す" }).click();
+  await expect(page.getByText("えー、回答です。", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/interview\?/);
+  expect(evaluationRequestCount).toBe(0);
 
   await page.getByRole("button", { name: "ホーム" }).click();
   await page.getByRole("button", { name: "ホームに戻る" }).click();

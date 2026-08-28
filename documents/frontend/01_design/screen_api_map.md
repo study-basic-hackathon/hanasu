@@ -55,7 +55,8 @@
 | S-08 | | | 回答する（音声） | `POST /interviews/stt` → `POST /interviews/chat` |
 | S-08 | | | 回答する（文字入力） | `POST /interviews/chat`（**STT を経由しない**） |
 | S-08 | | | 面接官の発言を読み上げる | `POST /interviews/tts`（**任意**。作らない場合は「読み上げる」を出さない） |
-| S-08 | | | 面接を終える、またはターン上限に達した | `POST /evaluations` |
+| S-08 | | | 中断する、またはターン上限到達後に評価を見る | `POST /evaluations` |
+| S-08 | | | ホームへ戻る | **なし。評価を実行しない** |
 | S-09〜S-13 | 練習モード（サブ機能含む） | **画面モックのみ** | — | **なし。評価も行わない** |
 | S-14 | 評価 - 合否判定 | 作る | 画面表示（S-08 から） | `GET /evaluations/{evaluation_id}`（`completed` になるまで**3秒間隔**でポーリング） |
 | S-14 | | | 画面表示（S-16 / S-04 から） | `GET /evaluations/{evaluation_id}`（1回） |
