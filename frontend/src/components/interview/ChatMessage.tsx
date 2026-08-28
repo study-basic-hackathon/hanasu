@@ -12,6 +12,9 @@ import {
 
 export type SpeechStatus = "idle" | "loading" | "playing" | "error";
 
+const FILLER_TOKEN_PATTERN = /(%[^%\r\n]+%)/g;
+const FILLER_TOKEN_EXACT_PATTERN = /^%([^%\r\n]+)%$/;
+
 /**
  * 会話ログの1件（S-08 5章）。
  * 面接官は左・白い吹き出し、自分は右・アクセント色の吹き出し。
@@ -30,10 +33,11 @@ export function ChatMessage({
   speechEnabled?: boolean;
 }) {
   const isSelf = turn.role === "user";
-  const content =
-    transcriptDisplayMode === "raw" && isVoiceAnswer(turn)
-      ? (turn.raw_content ?? turn.content)
-      : turn.content;
+  const highlightsFillers =
+    transcriptDisplayMode === "raw" && isVoiceAnswer(turn);
+  const content = highlightsFillers
+    ? (turn.raw_content ?? turn.content)
+    : turn.content;
 
   return (
     <div className={cn("flex gap-3.5", isSelf && "justify-end")}>
@@ -52,7 +56,11 @@ export function ChatMessage({
               : "rounded-[2px_8px_8px_8px] border border-line bg-surface",
           )}
         >
-          {content}
+          {highlightsFillers ? (
+            <HighlightedFillers content={content} />
+          ) : (
+            content
+          )}
         </div>
         <div className="flex flex-col items-end gap-1 text-note text-ink-muted">
           {isSelf ? (
@@ -72,6 +80,23 @@ export function ChatMessage({
       {isSelf && <Avatar label="自分" muted />}
     </div>
   );
+}
+
+function HighlightedFillers({ content }: { content: string }) {
+  return content.split(FILLER_TOKEN_PATTERN).map((part, index) => {
+    const filler = FILLER_TOKEN_EXACT_PATTERN.exec(part);
+    if (!filler) return part;
+
+    return (
+      <mark
+        key={`${index}-${filler[1]}`}
+        aria-label={`フィラー: ${filler[1]}`}
+        className="rounded-sm bg-accent-soft px-1 font-bold text-accent"
+      >
+        {filler[1]}
+      </mark>
+    );
+  });
 }
 
 function UserAnswerDetails({ turn }: { turn: ChatTurn }) {
