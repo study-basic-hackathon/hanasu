@@ -14,6 +14,7 @@ import {
   updateCompany,
   type Company,
 } from "@/lib/company-api";
+import { summarizeJobPosting } from "@/lib/job-posting-api";
 
 import { resolveReturnTo } from "./returnTo";
 
@@ -76,6 +77,15 @@ function toFormValues(company?: Company): FormValues {
 }
 
 function isHttpUrl(value: string): boolean {
+  if (
+    value.includes("\\") ||
+    [...value].some(
+      (character) =>
+        character.charCodeAt(0) <= 0x20 || character.charCodeAt(0) === 0x7f,
+    )
+  ) {
+    return false;
+  }
   try {
     const url = new URL(value);
     return (
@@ -121,10 +131,21 @@ export function ApplicationForm({
   const [errors, setErrors] = useState<Errors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const summaryInFlightRef = useRef(false);
 
   function update(key: keyof FormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
+    if (key === "job_summary") {
+      setErrors((current) => {
+        if (current.job_summary === undefined) return current;
+        const next = { ...current };
+        delete next.job_summary;
+        return next;
+      });
+    }
   }
 
   // 空白だけの入力は未入力として数える（S-07 4章）
@@ -138,8 +159,20 @@ export function ApplicationForm({
   ).map(({ label }) => label);
 
   // 企業名が空のあいだは「保存する」を押せなくする（S-07 5章）
+  const summaryUrl = values.company_url.trim();
+  const canSummarize =
+    summaryUrl.length <= FIELD_MAX_LENGTHS.company_url &&
+    isHttpUrl(summaryUrl);
+  const jobSummaryTooLong =
+    values.job_summary.trim().length > FIELD_MAX_LENGTHS.job_summary;
+  const jobSummaryLengthError = jobSummaryTooLong
+    ? `募集要項の要約は${FIELD_MAX_LENGTHS.job_summary.toLocaleString()}文字以内で入力してください。`
+    : undefined;
   const canSave =
-    values.company_name.trim() !== "" && values.motivation.trim() !== "";
+    values.company_name.trim() !== "" &&
+    values.motivation.trim() !== "" &&
+    !jobSummaryTooLong &&
+    !summarizing;
 
   function validate(): Errors {
     const next: Errors = {};
@@ -165,7 +198,7 @@ export function ApplicationForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || summaryInFlightRef.current) return;
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -205,6 +238,31 @@ export function ApplicationForm({
     }
   }
 
+  async function handleSummarize() {
+    if (!canSummarize || summaryInFlightRef.current || submitting) return;
+
+    summaryInFlightRef.current = true;
+    setSummarizing(true);
+    setSummaryError(null);
+    try {
+      const summary = await summarizeJobPosting(summaryUrl);
+      setValues((current) => ({ ...current, job_summary: summary }));
+      setErrors((current) => {
+        if (current.job_summary === undefined) return current;
+        const next = { ...current };
+        delete next.job_summary;
+        return next;
+      });
+    } catch {
+      setSummaryError(
+        "募集要項の要約を取得できませんでした。時間をおいてもう一度お試しください。",
+      );
+    } finally {
+      summaryInFlightRef.current = false;
+      setSummarizing(false);
+    }
+  }
+
   return (
     <PageContainer width={1000} className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -237,19 +295,43 @@ export function ApplicationForm({
               value={values.company_name}
               onChange={(event) => update("company_name", event.target.value)}
             />
-            <TextField
-              label="募集要項 URL"
-              name="company_url"
-              inputMode="url"
-              error={errors.company_url}
-              value={values.company_url}
-              onChange={(event) => update("company_url", event.target.value)}
-            />
+            <div className="flex flex-col gap-[7px]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                <TextField
+                  label="募集要項 URL"
+                  name="company_url"
+                  inputMode="url"
+                  error={errors.company_url}
+                  value={values.company_url}
+                  onChange={(event) => update("company_url", event.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-describedby={!canSummarize ? "summary-url-hint" : undefined}
+                  disabled={!canSummarize || summarizing || submitting}
+                  onClick={handleSummarize}
+                >
+                  {summarizing ? "要約しています" : "募集要項の要約"}
+                </Button>
+              </div>
+              {!canSummarize && (
+                <p id="summary-url-hint" className="text-note text-ink-muted">
+                  有効な募集要項URLを入力してください。
+                </p>
+              )}
+              {summaryError && (
+                <p role="alert" className="text-note text-danger">
+                  {summaryError}
+                </p>
+              )}
+            </div>
             <TextArea
               label="募集要項の要約"
               name="job_summary"
               rows={5}
-              error={errors.job_summary}
+              error={jobSummaryLengthError ?? errors.job_summary}
               value={values.job_summary}
               onChange={(event) => update("job_summary", event.target.value)}
             />
