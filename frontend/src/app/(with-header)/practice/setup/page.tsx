@@ -10,10 +10,19 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { cn } from "@/lib/cn";
 import { listCompanies, type Company } from "@/lib/company-api";
-import type { AnswerMethod, QuestionStrength } from "@/lib/domain";
-import { ANSWER_METHOD_LABEL, QUESTION_STRENGTH_LABEL } from "@/lib/domain";
+import type {
+  AnswerMethod,
+  QuestionStrength,
+  ReadAloudMode,
+} from "@/lib/domain";
+import {
+  ANSWER_METHOD_LABEL,
+  QUESTION_STRENGTH_LABEL,
+  READ_ALOUD_MODE_LABEL,
+} from "@/lib/domain";
 import {
   DEFAULT_MAX_TURNS,
+  DEFAULT_READ_ALOUD_MODE,
   MAX_MAX_TURNS,
   MIN_MAX_TURNS,
   parseMaxTurns,
@@ -23,6 +32,7 @@ type Mode = "interview" | "practice";
 
 const STRENGTHS: QuestionStrength[] = ["easy", "standard", "hard"];
 const ANSWER_METHODS: AnswerMethod[] = ["voice", "text"];
+const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
 
 /** 選択の丸。選択中はアクセント色で塗る */
 function RadioMark({ selected }: { selected: boolean }) {
@@ -54,6 +64,9 @@ export default function PracticeSetupPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("interview");
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
+  const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
+    DEFAULT_READ_ALOUD_MODE,
+  );
   const [strength, setStrength] = useState<QuestionStrength>("standard");
   const [maxTurnsInput, setMaxTurnsInput] = useState(
     String(DEFAULT_MAX_TURNS),
@@ -269,6 +282,34 @@ export default function PracticeSetupPage() {
             )}
           </Card>
         )}
+
+        {!isPracticeMode && (
+          <Card className="flex flex-col gap-3.5 px-[26px] py-6">
+            <h2 className="text-card-sm font-bold">読み上げモード</h2>
+            <div className="flex overflow-hidden rounded-control border border-line-strong">
+              {READ_ALOUD_MODES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
+                  aria-pressed={readAloudMode === value}
+                  onClick={() => setReadAloudMode(value)}
+                  className={cn(
+                    "h-btn-sm flex-1 text-body-sm",
+                    readAloudMode === value
+                      ? "bg-accent font-medium text-white"
+                      : "text-ink-label hover:bg-canvas",
+                  )}
+                >
+                  {READ_ALOUD_MODE_LABEL[value]}
+                </button>
+              ))}
+            </div>
+            <p className="text-note leading-[1.7] text-ink-muted">
+              面接中にも読み上げモードを変更できます。
+            </p>
+          </Card>
+        )}
       </div>
 
       <Card className="flex flex-col">
@@ -385,6 +426,7 @@ export default function PracticeSetupPage() {
                 companyId: String(companyId),
                 strength,
                 answerMethod,
+                readAloud: readAloudMode,
                 maxTurns: String(maxTurns),
               });
               router.push(`/interview?${params.toString()}`);

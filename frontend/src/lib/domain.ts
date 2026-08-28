@@ -15,6 +15,13 @@ export const ANSWER_METHOD_LABEL: Record<AnswerMethod, string> = {
   text: "文字入力",
 };
 
+export type ReadAloudMode = "enabled" | "disabled";
+
+export const READ_ALOUD_MODE_LABEL: Record<ReadAloudMode, string> = {
+  enabled: "読み上げる",
+  disabled: "読み上げない",
+};
+
 /** S-07 が扱う応募情報。#17 完了後の API 契約と揃える。 */
 export type Application = {
   id: number;
