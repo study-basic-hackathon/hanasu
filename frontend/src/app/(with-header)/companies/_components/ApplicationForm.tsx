@@ -31,40 +31,60 @@ type ReturnAwareApplicationFormProps = Pick<
 
 type FormValues = {
   company_name: string;
-  posting_url: string;
-  job_title: string;
-  documents: string;
+  company_url: string;
   motivation: string;
-  current_position: string;
-  experience_years: string;
   resume: string;
   note: string;
+  job_summary: string;
 };
 
-/** 充足度の分母は、企業名を除く8項目（S-07 4章） */
+/** 充足度の分母は、必須の企業名・志望動機を除く4項目（S-07 4章） */
 const OPTIONAL_FIELDS: { key: keyof FormValues; label: string }[] = [
-  { key: "posting_url", label: "募集要項 URL" },
-  { key: "job_title", label: "職種" },
-  { key: "documents", label: "応募書類" },
-  { key: "motivation", label: "志望動機" },
-  { key: "current_position", label: "現職 / 直近の所属" },
-  { key: "experience_years", label: "経験年数" },
+  { key: "company_url", label: "募集要項 URL" },
+  { key: "job_summary", label: "募集要項の要約" },
   { key: "resume", label: "経歴・実績" },
   { key: "note", label: "備考" },
 ];
 
+const FIELD_MAX_LENGTHS: Record<keyof FormValues, number> = {
+  company_name: 100,
+  company_url: 2_048,
+  motivation: 4_000,
+  resume: 10_000,
+  note: 2_000,
+  job_summary: 4_000,
+};
+
+const FIELD_LABELS: Record<keyof FormValues, string> = {
+  company_name: "企業名",
+  company_url: "募集要項 URL",
+  motivation: "志望動機",
+  resume: "経歴・実績",
+  note: "備考",
+  job_summary: "募集要項の要約",
+};
+
 function toFormValues(company?: Company): FormValues {
   return {
     company_name: company?.company_name ?? "",
-    posting_url: company?.company_url ?? "",
-    job_title: "",
-    documents: "",
+    company_url: company?.company_url ?? "",
     motivation: company?.motivation ?? "",
-    current_position: "",
-    experience_years: "",
     resume: company?.resume ?? "",
     note: company?.note ?? "",
+    job_summary: company?.job_summary ?? "",
   };
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.hostname !== ""
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -129,14 +149,16 @@ export function ApplicationForm({
     if (values.motivation.trim() === "") {
       next.motivation = "志望動機を入力してください。";
     }
-    const url = values.posting_url.trim();
-    if (url !== "" && !/^https?:\/\//.test(url)) {
-      next.posting_url =
-        "http:// または https:// で始まる URL を入力してください。";
+    for (const key of Object.keys(FIELD_MAX_LENGTHS) as (keyof FormValues)[]) {
+      const maxLength = FIELD_MAX_LENGTHS[key];
+      if (values[key].trim().length > maxLength) {
+        next[key] = `${FIELD_LABELS[key]}は${maxLength.toLocaleString()}文字以内で入力してください。`;
+      }
     }
-    const years = values.experience_years.trim();
-    if (years !== "" && !/^\d{1,2}$/.test(years)) {
-      next.experience_years = "0〜99 の数字で入力してください。";
+    const url = values.company_url.trim();
+    if (url !== "" && next.company_url === undefined && !isHttpUrl(url)) {
+      next.company_url =
+        "http:// または https:// で始まる URL を入力してください。";
     }
     return next;
   }
@@ -161,9 +183,10 @@ export function ApplicationForm({
       const input = {
         company_name: values.company_name.trim(),
         motivation: values.motivation.trim(),
-        company_url: values.posting_url.trim() || null,
+        company_url: values.company_url.trim() || null,
         resume: values.resume.trim() || null,
         note: values.note.trim() || null,
+        job_summary: values.job_summary.trim() || null,
       };
       if (company) await updateCompany(company.id, input);
       else await createCompany(input);
@@ -214,41 +237,21 @@ export function ApplicationForm({
               value={values.company_name}
               onChange={(event) => update("company_name", event.target.value)}
             />
-            <div className="grid grid-cols-[1fr_220px] gap-4">
-              <TextField
-                label="募集要項 URL"
-                name="posting_url"
-                inputMode="url"
-                error={errors.posting_url}
-                value={values.posting_url}
-                onChange={(event) => update("posting_url", event.target.value)}
-              />
-              <TextField
-                label="職種"
-                name="job_title"
-                disabled
-                hint="API の項目定義（#17）確定後に保存へ対応します。"
-                value={values.job_title}
-                onChange={(event) => update("job_title", event.target.value)}
-              />
-            </div>
-            <TextArea
-              label="応募書類（貼り付け）"
-              name="documents"
-              disabled
-              rows={5}
-              placeholder="職務経歴書の本文をそのまま貼り付けてください。面接官の質問に反映されます。"
-              value={values.documents}
-              onChange={(event) => update("documents", event.target.value)}
+            <TextField
+              label="募集要項 URL"
+              name="company_url"
+              inputMode="url"
+              error={errors.company_url}
+              value={values.company_url}
+              onChange={(event) => update("company_url", event.target.value)}
             />
             <TextArea
-              label="志望動機"
-              name="motivation"
-              required
-              error={errors.motivation}
+              label="募集要項の要約"
+              name="job_summary"
               rows={5}
-              value={values.motivation}
-              onChange={(event) => update("motivation", event.target.value)}
+              error={errors.job_summary}
+              value={values.job_summary}
+              onChange={(event) => update("job_summary", event.target.value)}
             />
           </Card>
 
@@ -259,33 +262,20 @@ export function ApplicationForm({
                 プロフィール登録は持たず、応募先ごとに書き分けます。
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <TextField
-                label="現職 / 直近の所属"
-                name="current_position"
-                disabled
-                value={values.current_position}
-                onChange={(event) =>
-                  update("current_position", event.target.value)
-                }
-              />
-              <TextField
-                label="経験年数"
-                name="experience_years"
-                disabled
-                inputMode="numeric"
-                suffix="年"
-                error={errors.experience_years}
-                value={values.experience_years}
-                onChange={(event) =>
-                  update("experience_years", event.target.value)
-                }
-              />
-            </div>
+            <TextArea
+              label="志望動機"
+              name="motivation"
+              required
+              error={errors.motivation}
+              rows={5}
+              value={values.motivation}
+              onChange={(event) => update("motivation", event.target.value)}
+            />
             <TextArea
               label="経歴・実績"
               name="resume"
               rows={4}
+              error={errors.resume}
               value={values.resume}
               onChange={(event) => update("resume", event.target.value)}
             />
@@ -293,6 +283,7 @@ export function ApplicationForm({
               label="備考"
               name="note"
               rows={3}
+              error={errors.note}
               placeholder="面接で触れてほしくない話題などがあれば記入してください。"
               value={values.note}
               onChange={(event) => update("note", event.target.value)}
@@ -321,7 +312,7 @@ export function ApplicationForm({
         <Card className="flex flex-col gap-3.5 p-[22px]">
           <h2 className="text-card-sm font-bold">入力のヒント</h2>
           <p className="text-note leading-[1.9] text-ink-sub">
-            埋まっている項目が多いほど、面接官の質問が具体的になります。企業名以外は後から追記できます。
+            埋まっている項目が多いほど、面接官の質問が具体的になります。企業名と志望動機以外は後から追記できます。
           </p>
           <div className="flex flex-col gap-2.5 border-t border-divider pt-3.5">
             <div className="flex justify-between text-label">

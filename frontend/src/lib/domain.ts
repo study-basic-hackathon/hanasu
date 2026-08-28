@@ -22,18 +22,15 @@ export const READ_ALOUD_MODE_LABEL: Record<ReadAloudMode, string> = {
   disabled: "読み上げない",
 };
 
-/** S-07 が扱う応募情報。#17 完了後の API 契約と揃える。 */
+/** S-05〜S-07 が扱う応募企業情報。応募情報 API の6項目と揃える。 */
 export type Application = {
   id: number;
   company_name: string;
-  posting_url: string;
-  job_title: string;
-  documents: string;
+  company_url: string;
   motivation: string;
-  current_position: string;
-  experience_years: number | null;
   resume: string;
   note: string;
+  job_summary: string;
 };
 
 export type EvaluationStatus = "processing" | "completed" | "failed";

@@ -1,6 +1,6 @@
 import { apiRequest, jsonRequest } from "@/lib/api-client";
 
-/** 現在の FastAPI 実装が返す応募企業情報。#17 完了後に画面型と統合する。 */
+/** FastAPI が返す応募企業情報。 */
 export type Company = {
   id: number;
   company_name: string;
@@ -8,6 +8,7 @@ export type Company = {
   resume: string | null;
   company_url: string | null;
   note: string | null;
+  job_summary: string | null;
   created_at: string;
 };
 
@@ -17,6 +18,7 @@ export type CompanyInput = {
   resume?: string | null;
   company_url?: string | null;
   note?: string | null;
+  job_summary?: string | null;
 };
 
 export function listCompanies(signal?: AbortSignal): Promise<Company[]> {

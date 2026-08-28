@@ -43,6 +43,7 @@ describe("company-api", () => {
       resume: "経歴",
       company_url: "https://example.com/jobs/1",
       note: null,
+      job_summary: "募集要項の要約",
     };
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ id: 1, ...input }), {

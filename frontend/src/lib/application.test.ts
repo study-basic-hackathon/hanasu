@@ -6,14 +6,11 @@ import type { Application } from "@/lib/domain";
 const emptyApplication: Application = {
   id: 1,
   company_name: "株式会社テスト",
-  posting_url: "",
-  job_title: "",
-  documents: "",
+  company_url: "",
   motivation: "",
-  current_position: "",
-  experience_years: null,
   resume: "",
   note: "",
+  job_summary: "",
 };
 
 describe("filledSections", () => {
@@ -21,8 +18,8 @@ describe("filledSections", () => {
     expect(
       filledSections({
         ...emptyApplication,
-        posting_url: "  ",
-        documents: "\n",
+        company_url: "  ",
+        job_summary: "\n",
         motivation: "\t",
         note: " ",
       }),
@@ -33,12 +30,11 @@ describe("filledSections", () => {
     expect(
       filledSections({
         ...emptyApplication,
-        posting_url: "https://example.com/jobs",
-        documents: "応募書類",
+        job_summary: "募集要項の要約",
         motivation: "志望動機",
-        experience_years: 0,
+        resume: "経歴・実績",
         note: "補足",
       }),
-    ).toEqual(["募集要項", "応募書類", "志望動機", "経歴", "備考"]);
+    ).toEqual(["募集要項", "志望動機", "経歴", "備考"]);
   });
 });
