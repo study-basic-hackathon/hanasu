@@ -60,13 +60,14 @@ export async function requestNextQuestion(input: {
   return response.text;
 }
 
-export function synthesizeSpeech(text: string): Promise<Blob> {
+export function synthesizeSpeech(text: string, signal?: AbortSignal): Promise<Blob> {
   return apiRequest<Blob>(
     "/interviews/tts",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
+      signal,
     },
     { responseType: "blob" },
   );

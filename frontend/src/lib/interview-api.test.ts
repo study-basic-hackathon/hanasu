@@ -122,10 +122,12 @@ describe("interview-api", () => {
       }),
     );
 
-    const audio = await synthesizeSpeech("質問です。");
+    const controller = new AbortController();
+    const audio = await synthesizeSpeech("質問です。", controller.signal);
     expect(audio).toBeInstanceOf(Blob);
     expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Accept")).toBe(
       "audio/mpeg",
     );
+    expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
   });
 });
