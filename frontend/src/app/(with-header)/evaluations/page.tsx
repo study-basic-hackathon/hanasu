@@ -201,10 +201,10 @@ export default function EvaluationsPage() {
             まだ結果がありません。練習かチュートリアルを始めると、ここに結果が並びます。
           </p>
           <Link
-            href="/practice/setup"
+            href="/"
             className={buttonClassName("primary", "sm")}
           >
-            練習を始める
+            面接・練習を始める
           </Link>
         </Card>
       ) : rows.length === 0 ? (

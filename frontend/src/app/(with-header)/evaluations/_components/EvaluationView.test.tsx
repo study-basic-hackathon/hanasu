@@ -73,4 +73,18 @@ describe("EvaluationView のフィラー表示", () => {
     expect(within(card).getByText("計測対象外")).toBeVisible();
     expect(scoreBar(card)).toBeEmptyDOMElement();
   });
+
+  it("再挑戦では本番モードを固定した設定画面へ戻る", () => {
+    render(
+      <EvaluationView
+        evaluation={completedEvaluation()}
+        fromInterview={false}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "再挑戦する" })).toHaveAttribute(
+      "href",
+      "/practice/setup?mode=interview",
+    );
+  });
 });
