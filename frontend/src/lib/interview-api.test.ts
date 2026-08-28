@@ -91,19 +91,23 @@ describe("interview-api", () => {
       }),
     );
 
+    const controller = new AbortController();
     await expect(
-      requestNextQuestion({
-        companyId: 3,
-        questionStrength: "hard",
-        maxTurns: 25,
-        history: [
-          {
-            role: "user",
-            content: "回答です。",
-            raw_content: "えー、回答です。",
-          },
-        ],
-      }),
+      requestNextQuestion(
+        {
+          companyId: 3,
+          questionStrength: "hard",
+          maxTurns: 25,
+          history: [
+            {
+              role: "user",
+              content: "回答です。",
+              raw_content: "えー、回答です。",
+            },
+          ],
+        },
+        controller.signal,
+      ),
     ).resolves.toBe("次の質問です。");
 
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
@@ -112,6 +116,7 @@ describe("interview-api", () => {
       max_turns: 25,
       history: [{ role: "user", content: "えー、回答です。" }],
     });
+    expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
   });
 
   it("TTS API の音声レスポンスを Blob で返す", async () => {

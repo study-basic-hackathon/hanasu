@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -120,6 +121,7 @@ describe("AnswerPanel の音声回答", () => {
     onSubmit?: (content: string, detail?: AnswerDetail) => void;
     onChangeAnswerMethod?: (method: "voice" | "text") => void;
     disabled?: boolean;
+    exitSignal?: AbortSignal;
   } = {}) {
     const onSubmit = options.onSubmit ?? vi.fn();
     const onChangeAnswerMethod = options.onChangeAnswerMethod ?? vi.fn();
@@ -129,6 +131,7 @@ describe("AnswerPanel の音声回答", () => {
         onChangeAnswerMethod={onChangeAnswerMethod}
         onSubmit={onSubmit}
         disabled={options.disabled}
+        exitSignal={options.exitSignal}
       />,
     );
     return { onSubmit, onChangeAnswerMethod };
@@ -179,6 +182,51 @@ describe("AnswerPanel の音声回答", () => {
     expect(
       screen.getByRole("button", { name: "回答を録音する" }),
     ).toBeEnabled();
+  });
+
+  it("面接終了時に録音と MediaStream を停止し、音声を送らない", async () => {
+    const controller = new AbortController();
+    const onSubmit = vi.fn();
+    renderPanel({ onSubmit, exitSignal: controller.signal });
+
+    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
+    await screen.findByRole("button", { name: "録音を停止して送信する" });
+
+    act(() => controller.abort());
+
+    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
+    expect(trackStop).toHaveBeenCalledOnce();
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "回答を録音する" }),
+    ).toBeDisabled();
+  });
+
+  it("面接終了時に進行中の STT を中断し、遅い結果から回答を追加しない", async () => {
+    const controller = new AbortController();
+    let sttSignal: AbortSignal | undefined;
+    let resolveTranscription!: (value: typeof transcription) => void;
+    mocks.transcribeAudio.mockImplementation(
+      (_audio: Blob, signal?: AbortSignal) =>
+        new Promise<typeof transcription>((resolve) => {
+          sttSignal = signal;
+          resolveTranscription = resolve;
+        }),
+    );
+    const onSubmit = vi.fn();
+    renderPanel({ onSubmit, exitSignal: controller.signal });
+
+    await startAndStopRecording();
+    await waitFor(() => expect(mocks.transcribeAudio).toHaveBeenCalledOnce());
+
+    act(() => controller.abort());
+    await act(async () => resolveTranscription(transcription));
+
+    expect(controller.signal.aborted).toBe(true);
+    expect(sttSignal?.aborted).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("1秒未満の録音は STT へ送らず再試行できる", async () => {

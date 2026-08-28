@@ -56,6 +56,8 @@ type SpeechState = {
   status: SpeechStatus;
 };
 
+type ExitAction = "interrupt" | "home";
+
 const IDLE_SPEECH_STATE: SpeechState = { turnIndex: null, status: "idle" };
 
 function questionStrengthOf(value: string | null): QuestionStrength | null {
@@ -107,6 +109,11 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [exitAction, setExitAction] = useState<ExitAction | null>(null);
+  const [exitStarted, setExitStarted] = useState(false);
+  const [interviewController, setInterviewController] = useState(
+    () => new AbortController(),
+  );
   const [waiting, setWaiting] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -117,6 +124,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const speechControllerRef = useRef<AbortController | null>(null);
   const speechOperationIdRef = useRef(0);
   const pendingAutoSpeechIndexRef = useRef<number | null>(null);
+  const interviewControllerRef = useRef(interviewController);
+  const chatControllerRef = useRef<AbortController | null>(null);
+  const exitStartedRef = useRef(false);
 
   const releaseSpeech = useCallback(() => {
     speechControllerRef.current?.abort();
@@ -210,10 +220,31 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
 
   useEffect(() => {
     return () => {
+      chatControllerRef.current?.abort();
       speechOperationIdRef.current += 1;
       releaseSpeech();
     };
   }, [releaseSpeech]);
+
+  /**
+   * 新しい離脱導線で共有する終了処理。確認の確定後に一度だけ実行し、
+   * 通信・録音・再生と画面内の一時会話データを破棄する。
+   */
+  const finishInterview = useCallback(() => {
+    if (exitStartedRef.current) return false;
+    exitStartedRef.current = true;
+    setExitStarted(true);
+    setExitAction(null);
+    interviewControllerRef.current.abort();
+    chatControllerRef.current?.abort();
+    chatControllerRef.current = null;
+    pendingAutoSpeechIndexRef.current = null;
+    stopSpeech();
+    setWaiting(false);
+    setTurns([]);
+    setApiError(null);
+    return true;
+  }, [stopSpeech]);
 
   useEffect(() => {
     if (isTutorial || companyId === null) return;
@@ -262,7 +293,10 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
    * `from=interview` は、失敗したときに「評価をやり直す」を出せる場合の目印
    */
   const goToEvaluation = useCallback(
-    async (evaluationTurns: ChatTurn[] = turns) => {
+    async (
+      evaluationTurns: ChatTurn[] = turns,
+      restoreInterruptedInterviewOnFailure = false,
+    ) => {
       if (evaluationInFlightRef.current) return;
       evaluationInFlightRef.current = true;
       setConfirmingEnd(false);
@@ -287,6 +321,14 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         );
       } catch {
         evaluationInFlightRef.current = false;
+        if (restoreInterruptedInterviewOnFailure) {
+          const restoredController = new AbortController();
+          interviewControllerRef.current = restoredController;
+          setInterviewController(restoredController);
+          exitStartedRef.current = false;
+          setExitStarted(false);
+          setTurns(evaluationTurns);
+        }
         setApiError(
           "評価を開始できませんでした。時間をおいてもう一度お試しください。",
         );
@@ -331,13 +373,20 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       if (companyId === null) return;
 
       setWaiting(true);
-      requestNextQuestion({
-        companyId,
-        questionStrength,
-        maxTurns,
-        history: nextTurns,
-      })
+      const chatController = new AbortController();
+      chatControllerRef.current?.abort();
+      chatControllerRef.current = chatController;
+      requestNextQuestion(
+        {
+          companyId,
+          questionStrength,
+          maxTurns,
+          history: nextTurns,
+        },
+        chatController.signal,
+      )
         .then((nextQuestion) => {
+          if (chatController.signal.aborted || exitStartedRef.current) return;
           pendingAutoSpeechIndexRef.current = nextTurns.length;
           setTurns([
             ...nextTurns,
@@ -346,8 +395,14 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           setWaiting(false);
         })
         .catch(() => {
+          if (chatController.signal.aborted || exitStartedRef.current) return;
           setWaiting(false);
           setApiError("次の質問を取得できませんでした。回答をもう一度送信してください。");
+        })
+        .finally(() => {
+          if (chatControllerRef.current === chatController) {
+            chatControllerRef.current = null;
+          }
         });
     },
     [
@@ -358,6 +413,19 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       turns,
     ],
   );
+
+  const confirmExit = useCallback(() => {
+    if (exitAction === null) return;
+    const action = exitAction;
+    const evaluationTurns = turns;
+    if (!finishInterview()) return;
+
+    if (action === "home") {
+      router.push("/");
+      return;
+    }
+    void goToEvaluation(evaluationTurns, true);
+  }, [exitAction, finishInterview, goToEvaluation, router, turns]);
 
   if (!isTutorial && companyId === null) {
     return (
@@ -373,23 +441,49 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         title={isTutorial ? "チュートリアル" : "本番モード"}
         right={
           !hasReachedTurnLimit ? (
-            <div className="flex items-center gap-3">
-              {/* 回答が1つもない状態では押せない（S-08 7章） */}
-              {!canEnd && (
-                <span className="text-note text-ink-muted">
-                  1問以上答えると評価できます。
-                </span>
-              )}
-              <Button
-                variant="danger"
-                size="xs"
-                disabled={!canEnd || evaluating}
-                onClick={() => setConfirmingEnd(true)}
-                className="font-medium"
-              >
-                {evaluating ? "評価を開始しています" : "面接を終える"}
-              </Button>
-            </div>
+            isTutorial ? (
+              <div className="flex items-center gap-3">
+                {!canEnd && (
+                  <span className="text-note text-ink-muted">
+                    1問以上答えると評価できます。
+                  </span>
+                )}
+                <Button
+                  variant="danger"
+                  size="xs"
+                  disabled={!canEnd || evaluating}
+                  onClick={() => setConfirmingEnd(true)}
+                  className="font-medium"
+                >
+                  {evaluating ? "評価を開始しています" : "面接を終える"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                {!canEnd && (
+                  <span className="text-note text-ink-muted">
+                    1問以上答えると評価できます。
+                  </span>
+                )}
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={exitStarted}
+                  onClick={() => setExitAction("home")}
+                >
+                  ホーム
+                </Button>
+                <Button
+                  variant="danger"
+                  size="xs"
+                  disabled={!canEnd || exitStarted}
+                  onClick={() => setExitAction("interrupt")}
+                  className="font-medium"
+                >
+                  中断
+                </Button>
+              </div>
+            )
           ) : undefined
         }
       />
@@ -526,6 +620,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
             onSubmit={handleSubmit}
             waiting={waiting || evaluating}
             disabled={hasReachedTurnLimit}
+            exitSignal={interviewController.signal}
           />
           <p className="text-note text-ink-muted">
             {hasReachedTurnLimit
@@ -542,6 +637,18 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         confirmVariant="primary"
         onConfirm={() => void goToEvaluation()}
         onCancel={() => setConfirmingEnd(false)}
+      />
+      <ConfirmDialog
+        open={exitAction !== null}
+        message={
+          exitAction === "interrupt"
+            ? "評価に進みます。この会話には戻れません。"
+            : "ホームに戻ると、この会話は失われます。評価は行われません。"
+        }
+        confirmLabel={exitAction === "interrupt" ? "中断して評価に進む" : "ホームに戻る"}
+        confirmVariant={exitAction === "interrupt" ? "primary" : "dangerSolid"}
+        onConfirm={confirmExit}
+        onCancel={() => setExitAction(null)}
       />
     </div>
   );

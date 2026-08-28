@@ -114,6 +114,11 @@ describe("InterviewScreen の読み上げモード", () => {
   it("開始前の選択を表示直後に反映し、会話と回答方式を保ったまま切り替える", async () => {
     render(<InterviewScreen mode="interview" />);
 
+    expect(screen.getByRole("button", { name: "ホーム" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "中断" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "面接を終える" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -317,6 +322,109 @@ describe("InterviewScreen の読み上げモード", () => {
 
     expect(audio.pause).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:question-1");
+  });
+
+  it("中断確認を取り消すと会話・通信・再生を維持する", async () => {
+    render(<InterviewScreen mode="interview" />);
+    submitAnswer("続ける回答です。");
+    await screen.findByRole("button", { name: "停止する" });
+    const audio = FakeAudio.instances[0];
+
+    fireEvent.click(screen.getByRole("button", { name: "中断" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "評価に進みます。この会話には戻れません。",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+
+    expect(screen.getByText("続ける回答です。")).toBeInTheDocument();
+    expect(audio.pause).not.toHaveBeenCalled();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("中断時に再生と一時会話を破棄して評価を一度だけ開始する", async () => {
+    mocks.createEvaluation.mockImplementation(() => new Promise<number>(() => undefined));
+    render(<InterviewScreen mode="interview" />);
+    submitAnswer("評価する回答です。");
+    await screen.findByRole("button", { name: "停止する" });
+    const audio = FakeAudio.instances[0];
+
+    fireEvent.click(screen.getByRole("button", { name: "中断" }));
+    const confirm = screen.getByRole("button", { name: "中断して評価に進む" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(mocks.createEvaluation).toHaveBeenCalledOnce());
+    expect(mocks.createEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turns: expect.arrayContaining([
+          expect.objectContaining({ role: "user", content: "評価する回答です。" }),
+        ]),
+      }),
+    );
+    expect(audio.pause).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:question-1");
+    expect(screen.queryByText("評価する回答です。")).not.toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("中断後の評価開始に失敗した場合は会話を戻して再試行できる", async () => {
+    mocks.createEvaluation
+      .mockRejectedValueOnce(new Error("evaluation failed"))
+      .mockResolvedValueOnce(90);
+    render(<InterviewScreen mode="interview" />);
+    submitAnswer("再試行する回答です。");
+    await screen.findByText("次の質問です。");
+
+    fireEvent.click(screen.getByRole("button", { name: "中断" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "中断して評価に進む" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "評価を開始できませんでした。時間をおいてもう一度お試しください。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("再試行する回答です。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "中断" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "中断" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "中断して評価に進む" }),
+    );
+
+    await waitFor(() => expect(mocks.createEvaluation).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith(
+        "/evaluations/detail?id=90&from=interview",
+      ),
+    );
+  });
+
+  it("ホーム確認後は進行中の chat と一時会話を破棄し、評価せず一度だけ遷移する", async () => {
+    let chatSignal: AbortSignal | undefined;
+    mocks.requestNextQuestion.mockImplementation(
+      (_input: unknown, signal?: AbortSignal) => {
+        chatSignal = signal;
+        return new Promise<string>(() => undefined);
+      },
+    );
+    render(<InterviewScreen mode="interview" />);
+    submitAnswer("破棄する回答です。");
+    await waitFor(() => expect(mocks.requestNextQuestion).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
+    const confirm = screen.getByRole("button", { name: "ホームに戻る" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    expect(chatSignal?.aborted).toBe(true);
+    expect(screen.queryByText("破棄する回答です。")).not.toBeInTheDocument();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).toHaveBeenCalledOnce();
+    expect(mocks.push).toHaveBeenCalledWith("/");
   });
 
   it("設定した上限で終了し、会話を確認して評価を見るまでAPIと遷移を待つ", async () => {
