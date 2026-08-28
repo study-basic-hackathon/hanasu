@@ -123,6 +123,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const speechObjectUrlRef = useRef<string | null>(null);
   const speechControllerRef = useRef<AbortController | null>(null);
   const speechOperationIdRef = useRef(0);
+  const initialAutoSpeechStartedRef = useRef(false);
   const pendingAutoSpeechIndexRef = useRef<number | null>(null);
   const interviewControllerRef = useRef(interviewController);
   const chatControllerRef = useRef<AbortController | null>(null);
@@ -225,6 +226,27 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       releaseSpeech();
     };
   }, [releaseSpeech]);
+
+  useEffect(() => {
+    if (
+      isTutorial ||
+      configuredReadAloudMode !== "enabled" ||
+      initialAutoSpeechStartedRef.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled || initialAutoSpeechStartedRef.current) return;
+      initialAutoSpeechStartedRef.current = true;
+      void startSpeech(0, FIRST_QUESTION);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configuredReadAloudMode, isTutorial, startSpeech]);
 
   /**
    * 新しい離脱導線で共有する終了処理。確認の確定後に一度だけ実行し、

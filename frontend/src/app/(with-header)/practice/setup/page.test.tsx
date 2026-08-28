@@ -51,7 +51,7 @@ describe("PracticeSetupPage", () => {
     );
   }
 
-  it("既定値を読み上げないとして面接画面へ渡す", async () => {
+  it("本番モードの設定を確認し、確定した場合だけ面接画面へ渡す", async () => {
     render(<PracticeSetupPage />);
 
     expect(
@@ -68,24 +68,65 @@ describe("PracticeSetupPage", () => {
       screen.getByRole("button", { name: "本番モードを始める" }),
     );
 
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("この設定で本番モードを開始しますか？");
+    expect(dialog).toHaveTextContent("対象企業株式会社テスト");
+    expect(dialog).toHaveTextContent("回答方式音声");
+    expect(dialog).toHaveTextContent("質問の強度標準");
+    expect(dialog).toHaveTextContent("最大ターン数10 ターン");
+    expect(dialog).toHaveTextContent("読み上げモード読み上げない");
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "開始する" }));
+
     expect(mocks.push).toHaveBeenCalledWith(
       "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=disabled&maxTurns=10",
     );
   });
 
-  it("読み上げるを選ぶと選択値を面接画面へ渡す", async () => {
+  it("確認を取り消しても選択済みの設定を保持し、再確認して開始できる", async () => {
     render(<PracticeSetupPage />);
 
+    fireEvent.click(screen.getByRole("button", { name: "文字入力" }));
+    fireEvent.click(screen.getByRole("button", { name: "厳しめ" }));
     fireEvent.click(
       screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
     );
+    fireEvent.change(screen.getByRole("spinbutton", { name: "最大ターン数" }), {
+      target: { value: "12" },
+    });
     await selectCompany();
     fireEvent.click(
       screen.getByRole("button", { name: "本番モードを始める" }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "文字入力" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "厳しめ" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("spinbutton", { name: "最大ターン数" })).toHaveValue(
+      12,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "本番モードを始める" }),
+    );
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "読み上げモード読み上げる",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "開始する" }));
 
     expect(mocks.push).toHaveBeenCalledWith(
-      "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=enabled&maxTurns=10",
+      "/interview?companyId=7&strength=hard&answerMethod=text&readAloud=enabled&maxTurns=12",
     );
   });
 

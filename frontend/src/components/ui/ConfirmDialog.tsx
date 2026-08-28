@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { Button, type ButtonVariant } from "@/components/ui/Button";
 
 type ConfirmDialogProps = {
   open: boolean;
-  /** 確認の文面 */
-  message: string;
+  /** 確認の文面または詳細 */
+  message: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   /** 確定のボタンの見た目 */
@@ -17,7 +17,7 @@ type ConfirmDialogProps = {
 };
 
 /**
- * 確認（S-06 の削除、S-08 の面接終了）。
+ * 確認（S-05 の開始、S-06 の削除、S-08 の面接終了）。
  * フォーカスの閉じ込めと Esc を自前で書かずに済むよう、ブラウザの dialog を使う。
  */
 export function ConfirmDialog({
@@ -49,7 +49,7 @@ export function ConfirmDialog({
       className="m-auto rounded-card border border-line bg-surface p-0 text-ink backdrop:bg-black/30"
     >
       <div className="flex w-[420px] flex-col gap-5 p-7">
-        <p className="text-body-sm leading-[1.9]">{message}</p>
+        <div className="text-body-sm leading-[1.9]">{message}</div>
         <div className="flex justify-end gap-2.5">
           <Button variant="secondary" size="sm" onClick={onCancel}>
             {cancelLabel}

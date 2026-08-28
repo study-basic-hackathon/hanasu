@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { filledSections } from "@/lib/application";
 import { cn } from "@/lib/cn";
 import { listCompanies, type Company } from "@/lib/company-api";
@@ -86,6 +87,7 @@ function PracticeSetupContent() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingStart, setConfirmingStart] = useState(false);
 
   useEffect(() => {
     if (mode === null) router.replace("/");
@@ -127,6 +129,20 @@ function PracticeSetupContent() {
   // 本番モードは対象企業が1つ選ばれていることが条件。練習モードは条件なし（S-05 5章）
   const canStart =
     isPracticeMode || (companyId !== null && maxTurns !== null);
+  const selectedCompany = companies.find((company) => company.id === companyId);
+
+  function startInterview() {
+    if (companyId === null || maxTurns === null) return;
+    const params = new URLSearchParams({
+      companyId: String(companyId),
+      strength,
+      answerMethod,
+      readAloud: readAloudMode,
+      maxTurns: String(maxTurns),
+    });
+    setConfirmingStart(false);
+    router.push(`/interview?${params.toString()}`);
+  }
 
   function adjustMaxTurns(amount: -1 | 1) {
     const entered = Number(maxTurnsInput);
@@ -388,14 +404,7 @@ function PracticeSetupContent() {
                 return;
               }
               if (companyId === null || maxTurns === null) return;
-              const params = new URLSearchParams({
-                companyId: String(companyId),
-                strength,
-                answerMethod,
-                readAloud: readAloudMode,
-                maxTurns: String(maxTurns),
-              });
-              router.push(`/interview?${params.toString()}`);
+              setConfirmingStart(true);
             }}
             className="px-[34px]"
           >
@@ -405,6 +414,38 @@ function PracticeSetupContent() {
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingStart}
+        message={
+          <div className="flex flex-col gap-4">
+            <h2 className="text-card-sm font-bold">
+              この設定で本番モードを開始しますか？
+            </h2>
+            <dl className="divide-y divide-divider rounded-control border border-line">
+              {[
+                ["対象企業", selectedCompany?.company_name ?? "—"],
+                ["回答方式", ANSWER_METHOD_LABEL[answerMethod]],
+                ["質問の強度", QUESTION_STRENGTH_LABEL[strength]],
+                ["最大ターン数", `${maxTurns ?? "—"} ターン`],
+                ["読み上げモード", READ_ALOUD_MODE_LABEL[readAloudMode]],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="grid grid-cols-[120px_1fr] gap-3 px-4 py-2.5"
+                >
+                  <dt className="text-ink-muted">{label}</dt>
+                  <dd className="font-medium text-ink">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        }
+        confirmLabel="開始する"
+        confirmVariant="primary"
+        onConfirm={startInterview}
+        onCancel={() => setConfirmingStart(false)}
+      />
     </PageContainer>
   );
 }
