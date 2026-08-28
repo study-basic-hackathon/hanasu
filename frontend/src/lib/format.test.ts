@@ -22,8 +22,8 @@ describe("表示用フォーマット", () => {
 
   it("数値を画面仕様の単位と丸めで表示する", () => {
     expect(formatSpeakingSpeed(283.6)).toBe("284 文字/分");
-    expect(formatFiller(11.6)).toBe("12 回");
-    expect(formatFiller(11.6, 2.14)).toBe("12 回 / 2.1 回/分");
+    expect(formatFiller(2.14)).toBe("2.1 回/分");
+    expect(formatFiller(9)).toBe("9.0 回/分");
     expect(formatCount(12)).toBe("12 件");
   });
 });
