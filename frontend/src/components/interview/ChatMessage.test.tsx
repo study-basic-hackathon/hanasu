@@ -59,4 +59,20 @@ describe("ChatMessage の読み上げ操作", () => {
       screen.queryByRole("button", { name: "読み上げる" }),
     ).not.toBeInTheDocument();
   });
+
+  it("TTS対象外の面接官発言には読み上げ操作を表示しない", () => {
+    render(
+      <ChatMessage
+        turn={{ role: "assistant", content: "お疲れ様でした" }}
+        speechStatus="idle"
+        onToggleSpeech={vi.fn()}
+        speechEnabled={false}
+      />,
+    );
+
+    expect(screen.getByText("お疲れ様でした")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "読み上げる" }),
+    ).not.toBeInTheDocument();
+  });
 });

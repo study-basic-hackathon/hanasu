@@ -11,10 +11,12 @@ import { InterviewScreen } from "@/components/interview/InterviewScreen";
 
 const mocks = vi.hoisted(() => ({
   audioPlay: vi.fn(),
+  createEvaluation: vi.fn(),
   getCompany: vi.fn(),
   push: vi.fn(),
   requestNextQuestion: vi.fn(),
   search: "",
+  storeEvaluationSession: vi.fn(),
   synthesizeSpeech: vi.fn(),
 }));
 
@@ -25,6 +27,14 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/company-api", () => ({
   getCompany: mocks.getCompany,
+}));
+
+vi.mock("@/lib/evaluation-api", () => ({
+  createEvaluation: mocks.createEvaluation,
+}));
+
+vi.mock("@/lib/evaluation-session", () => ({
+  storeEvaluationSession: mocks.storeEvaluationSession,
 }));
 
 vi.mock("@/lib/interview-api", () => ({
@@ -70,6 +80,7 @@ describe("InterviewScreen の読み上げモード", () => {
     mocks.search =
       "companyId=7&strength=standard&answerMethod=text&readAloud=enabled&maxTurns=10";
     mocks.getCompany.mockResolvedValue(company);
+    mocks.createEvaluation.mockResolvedValue(88);
     mocks.requestNextQuestion.mockResolvedValue("次の質問です。");
     mocks.synthesizeSpeech.mockResolvedValue(
       new Blob(["mp3"], { type: "audio/mpeg" }),
@@ -306,5 +317,142 @@ describe("InterviewScreen の読み上げモード", () => {
 
     expect(audio.pause).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:question-1");
+  });
+
+  it("設定した上限で終了し、会話を確認して評価を見るまでAPIと遷移を待つ", async () => {
+    let resolveEvaluation!: (evaluationId: number) => void;
+    mocks.search =
+      "companyId=7&strength=hard&answerMethod=text&readAloud=disabled&maxTurns=2";
+    mocks.requestNextQuestion.mockResolvedValue("2つ目の質問です。");
+    mocks.createEvaluation.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveEvaluation = resolve;
+        }),
+    );
+    render(<InterviewScreen mode="interview" />);
+
+    submitAnswer("1つ目の回答です。");
+    expect(await screen.findByText("2つ目の質問です。")).toBeInTheDocument();
+    submitAnswer("最後の回答です。");
+
+    const finalAnswer = screen.getByText("最後の回答です。");
+    const completion = await screen.findByText("お疲れ様でした");
+    expect(
+      finalAnswer.compareDocumentPosition(completion) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(mocks.requestNextQuestion).toHaveBeenCalledOnce();
+    expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(
+      screen.getByPlaceholderText("回答を入力してください"),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "文字入力で回答" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "面接を終える" }),
+    ).not.toBeInTheDocument();
+
+    const evaluationButton = screen.getByRole("button", {
+      name: "評価を見る",
+    });
+    fireEvent.click(evaluationButton);
+    expect(evaluationButton).toBeDisabled();
+    fireEvent.click(evaluationButton);
+
+    expect(mocks.createEvaluation).toHaveBeenCalledOnce();
+    expect(mocks.createEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 7,
+        questionStrength: "hard",
+        turns: [
+          expect.objectContaining({ role: "assistant" }),
+          expect.objectContaining({ role: "user", content: "1つ目の回答です。" }),
+          expect.objectContaining({ role: "assistant", content: "2つ目の質問です。" }),
+          expect.objectContaining({ role: "user", content: "最後の回答です。" }),
+        ],
+      }),
+    );
+
+    resolveEvaluation(88);
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith(
+        "/evaluations/detail?id=88&from=interview",
+      ),
+    );
+  });
+
+  it("チュートリアルは1回答で終了し、終了表示だけではchat・TTS・評価を呼ばない", async () => {
+    mocks.search = "answerMethod=text&maxTurns=25";
+    render(<InterviewScreen mode="tutorial" />);
+
+    submitAnswer("自己紹介の回答です。");
+
+    expect(await screen.findByText("お疲れ様でした")).toBeInTheDocument();
+    expect(mocks.getCompany).not.toHaveBeenCalled();
+    expect(mocks.requestNextQuestion).not.toHaveBeenCalled();
+    expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
+    expect(mocks.createEvaluation).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(
+      screen.getByPlaceholderText("回答を入力してください"),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "評価を見る" }));
+
+    await waitFor(() => expect(mocks.createEvaluation).toHaveBeenCalledOnce());
+    expect(mocks.createEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: null,
+        questionStrength: null,
+        turns: [
+          expect.objectContaining({
+            role: "assistant",
+            content: "1分で自己紹介してください。",
+          }),
+          expect.objectContaining({
+            role: "user",
+            content: "自己紹介の回答です。",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("評価開始に失敗しても終了時の会話を保持し、評価を見るから再試行できる", async () => {
+    mocks.search =
+      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=1";
+    mocks.createEvaluation
+      .mockRejectedValueOnce(new Error("evaluation failed"))
+      .mockResolvedValueOnce(89);
+    render(<InterviewScreen mode="interview" />);
+    submitAnswer("保持する回答です。");
+
+    const evaluationButton = await screen.findByRole("button", {
+      name: "評価を見る",
+    });
+    fireEvent.click(evaluationButton);
+
+    expect(
+      await screen.findByText(
+        "評価を開始できませんでした。時間をおいてもう一度お試しください。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("保持する回答です。")).toBeInTheDocument();
+    expect(screen.getByText("お疲れ様でした")).toBeInTheDocument();
+    expect(evaluationButton).toBeEnabled();
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(evaluationButton);
+
+    await waitFor(() => expect(mocks.createEvaluation).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith(
+        "/evaluations/detail?id=89&from=interview",
+      ),
+    );
   });
 });

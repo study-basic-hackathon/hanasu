@@ -13,10 +13,12 @@ export function ChatMessage({
   turn,
   speechStatus,
   onToggleSpeech,
+  speechEnabled = true,
 }: {
   turn: ChatTurn;
   speechStatus: SpeechStatus;
   onToggleSpeech: () => void;
+  speechEnabled?: boolean;
 }) {
   const isSelf = turn.role === "user";
 
@@ -54,7 +56,9 @@ export function ChatMessage({
           ) : (
             <>
               {turn.time && <span>{turn.time}</span>}
-              <SpeakButton status={speechStatus} onToggle={onToggleSpeech} />
+              {speechEnabled && (
+                <SpeakButton status={speechStatus} onToggle={onToggleSpeech} />
+              )}
             </>
           )}
         </div>

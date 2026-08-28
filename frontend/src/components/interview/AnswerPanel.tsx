@@ -29,6 +29,7 @@ type AnswerPanelProps = {
   onChangeAnswerMethod: (method: AnswerMethod) => void;
   onSubmit: (content: string, detail?: AnswerDetail) => void;
   waiting?: boolean;
+  disabled?: boolean;
 };
 
 const METHOD_LABEL: Record<AnswerMethod, string> = {
@@ -72,6 +73,7 @@ export function AnswerPanel({
   onChangeAnswerMethod,
   onSubmit,
   waiting = false,
+  disabled = false,
 }: AnswerPanelProps) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState<RecordingState>("idle");
@@ -263,7 +265,7 @@ export function AnswerPanel({
               key={method}
               type="button"
               aria-pressed={answerMethod === method}
-              disabled={isBusy}
+              disabled={isBusy || disabled}
               onClick={() => {
                 setNotice(null);
                 onChangeAnswerMethod(method);
@@ -340,7 +342,7 @@ export function AnswerPanel({
                 <button
                   type="button"
                   aria-label="回答を録音する"
-                  disabled={isBusy || waiting}
+                  disabled={isBusy || waiting || disabled}
                   onClick={startRecording}
                   className="grid size-16 flex-none place-items-center rounded-full bg-accent shadow-[0_0_0_6px_#e4efee] disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -362,7 +364,7 @@ export function AnswerPanel({
           <textarea
             rows={3}
             value={text}
-            disabled={waiting}
+            disabled={waiting || disabled}
             placeholder="回答を入力してください"
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -375,7 +377,11 @@ export function AnswerPanel({
           />
           <div className="flex items-center justify-end gap-3">
             <span className="text-note text-ink-muted">Ctrl + Enter で送信</span>
-            <Button size="sm" disabled={text.trim() === "" || waiting} onClick={submitText}>
+            <Button
+              size="sm"
+              disabled={text.trim() === "" || waiting || disabled}
+              onClick={submitText}
+            >
               送信する
             </Button>
           </div>

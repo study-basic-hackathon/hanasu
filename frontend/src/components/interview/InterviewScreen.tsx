@@ -46,6 +46,10 @@ import { requestNextQuestion, synthesizeSpeech } from "@/lib/interview-api";
 export type InterviewMode = "interview" | "tutorial";
 
 const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
+const COMPLETION_TURN: ChatTurn = {
+  role: "assistant",
+  content: "お疲れ様でした",
+};
 
 type SpeechState = {
   turnIndex: number | null;
@@ -107,6 +111,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const [evaluating, setEvaluating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const evaluationInFlightRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechObjectUrlRef = useRef<string | null>(null);
   const speechControllerRef = useRef<AbortController | null>(null);
@@ -227,6 +232,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   // 回答を送るまでは、いま答えようとしているターンの番号（S-08 4章）
   const currentTurn = Math.min(answeredTurns + 1, maxTurns);
   const canEnd = answeredTurns > 0;
+  const hasReachedTurnLimit = answeredTurns >= maxTurns;
 
   // 新しい発言が増えたら、その発言が見えるところまで送る（S-08 5章）
   useEffect(() => {
@@ -257,7 +263,8 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
    */
   const goToEvaluation = useCallback(
     async (evaluationTurns: ChatTurn[] = turns) => {
-      if (evaluating) return;
+      if (evaluationInFlightRef.current) return;
+      evaluationInFlightRef.current = true;
       setConfirmingEnd(false);
       setEvaluating(true);
       setApiError(null);
@@ -279,6 +286,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           `/evaluations/detail?id=${evaluationId}&from=interview`,
         );
       } catch {
+        evaluationInFlightRef.current = false;
         setApiError(
           "評価を開始できませんでした。時間をおいてもう一度お試しください。",
         );
@@ -288,7 +296,6 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       answerMethod,
       companyId,
       companyName,
-      evaluating,
       isTutorial,
       questionStrength,
       router,
@@ -317,9 +324,8 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       setTurns(nextTurns);
       setApiError(null);
 
-      // 上限に達したら確認を出さずに評価へ進む（S-08 4章 / 9章）
+      // 上限到達後は会話を確認できる状態で止め、評価は利用者の操作を待つ。
       if (answeredTurns + 1 >= maxTurns) {
-        void goToEvaluation(nextTurns);
         return;
       }
       if (companyId === null) return;
@@ -347,7 +353,6 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     [
       answeredTurns,
       companyId,
-      goToEvaluation,
       maxTurns,
       questionStrength,
       turns,
@@ -367,23 +372,25 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       <SessionHeader
         title={isTutorial ? "チュートリアル" : "本番モード"}
         right={
-          <div className="flex items-center gap-3">
-            {/* 回答が1つもない状態では押せない（S-08 7章） */}
-            {!canEnd && (
-              <span className="text-note text-ink-muted">
-                1問以上答えると評価できます。
-              </span>
-            )}
-            <Button
-              variant="danger"
-              size="xs"
-              disabled={!canEnd || evaluating}
-              onClick={() => setConfirmingEnd(true)}
-              className="font-medium"
-            >
-              {evaluating ? "評価を開始しています" : "面接を終える"}
-            </Button>
-          </div>
+          !hasReachedTurnLimit ? (
+            <div className="flex items-center gap-3">
+              {/* 回答が1つもない状態では押せない（S-08 7章） */}
+              {!canEnd && (
+                <span className="text-note text-ink-muted">
+                  1問以上答えると評価できます。
+                </span>
+              )}
+              <Button
+                variant="danger"
+                size="xs"
+                disabled={!canEnd || evaluating}
+                onClick={() => setConfirmingEnd(true)}
+                className="font-medium"
+              >
+                {evaluating ? "評価を開始しています" : "面接を終える"}
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 
@@ -479,6 +486,14 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
               onToggleSpeech={() => toggleSpeech(index, turn.content)}
             />
           ))}
+          {hasReachedTurnLimit && (
+            <ChatMessage
+              turn={COMPLETION_TURN}
+              speechStatus="idle"
+              onToggleSpeech={() => undefined}
+              speechEnabled={false}
+            />
+          )}
           {waiting && <ThinkingMessage />}
           <div ref={logEndRef} />
         </div>
@@ -491,14 +506,31 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
               {apiError}
             </p>
           )}
+          {hasReachedTurnLimit && (
+            <div className="flex items-center justify-between gap-6 rounded-card border border-accent/30 bg-accent-soft px-5 py-4">
+              <p className="text-body-sm text-ink-sub">
+                面接が終了しました。会話内容を確認してから評価へ進んでください。
+              </p>
+              <Button
+                size="sm"
+                disabled={evaluating}
+                onClick={() => void goToEvaluation()}
+              >
+                {evaluating ? "評価を開始しています" : "評価を見る"}
+              </Button>
+            </div>
+          )}
           <AnswerPanel
             answerMethod={answerMethod}
             onChangeAnswerMethod={setAnswerMethod}
             onSubmit={handleSubmit}
             waiting={waiting || evaluating}
+            disabled={hasReachedTurnLimit}
           />
           <p className="text-note text-ink-muted">
-            この画面を離れると会話は失われます。評価は「面接を終える」を押したあとに行われます。
+            {hasReachedTurnLimit
+              ? "この画面を離れると会話は失われます。評価は「評価を見る」を押したあとに行われます。"
+              : "この画面を離れると会話は失われます。評価は「面接を終える」を押したあとに行われます。"}
           </p>
         </div>
       </div>

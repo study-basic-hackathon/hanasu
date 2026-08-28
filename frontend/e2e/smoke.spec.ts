@@ -431,8 +431,10 @@ test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡
 }) => {
   await installFakeRecorder(page);
   const sttRequestCount = await mockStt(page);
+  let evaluationRequestCount = 0;
   await page.route("http://localhost:8000/evaluations", async (route) => {
     if (route.request().method() !== "POST") return route.fallback();
+    evaluationRequestCount += 1;
 
     expect(route.request().postDataJSON()).toMatchObject({
       company_id: null,
@@ -456,6 +458,13 @@ test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡
   await page
     .getByRole("button", { name: "録音を停止して送信する" })
     .click();
+
+  await expect(page.getByText("お疲れ様でした")).toBeVisible();
+  await expect(page.getByRole("button", { name: "評価を見る" })).toBeVisible();
+  await expect(page).toHaveURL(/\/tutorial$/);
+  expect(evaluationRequestCount).toBe(0);
+
+  await page.getByRole("button", { name: "評価を見る" }).click();
 
   await expect(page).toHaveURL(
     /\/evaluations\/detail\?id=88&from=interview$/,
@@ -492,7 +501,7 @@ test("設定画面で最大ターン数を1〜25の整数として設定でき�
     .toHaveAttribute("aria-valuemax", "25");
 });
 
-test("1ターンで自動終了し、不正なURL値は10、チュートリアルは1に固定する", async ({ page }) => {
+test("1ターンで終了表示し、不正なURL値は10、チュートリアルは1に固定する", async ({ page }) => {
   await page.goto(
     "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=0",
   );
@@ -506,6 +515,13 @@ test("1ターンで自動終了し、不正なURL値は10、チュートリア�
   );
   await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
   await page.getByRole("button", { name: "送信する" }).click();
+
+  await expect(page.getByText("お疲れ様でした")).toBeVisible();
+  await expect(page.getByPlaceholder("回答を入力してください")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "評価を見る" })).toBeVisible();
+  await expect(page).toHaveURL(/\/interview\?/);
+
+  await page.getByRole("button", { name: "評価を見る" }).click();
 
   await expect(page).toHaveURL(
     /\/evaluations\/detail\?id=88&from=interview$/,
