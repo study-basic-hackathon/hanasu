@@ -50,7 +50,7 @@ describe("interview-api", () => {
     expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
   });
 
-  it("質問強度と未加工 STT テキストを chat API へ送る", async () => {
+  it("質問強度・最大ターン数と未加工 STT テキストを chat API へ送る", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ text: "次の質問です。" }), {
         status: 200,
@@ -62,6 +62,7 @@ describe("interview-api", () => {
       requestNextQuestion({
         companyId: 3,
         questionStrength: "hard",
+        maxTurns: 25,
         history: [
           {
             role: "user",
@@ -75,6 +76,7 @@ describe("interview-api", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
       company_id: 3,
       question_strength: "hard",
+      max_turns: 25,
       history: [{ role: "user", content: "えー、回答です。" }],
     });
   });

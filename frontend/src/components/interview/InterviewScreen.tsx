@@ -29,7 +29,7 @@ import {
 import {
   countFillers,
   FIRST_QUESTION,
-  MAX_TURNS,
+  resolveMaxTurns,
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
 } from "@/lib/interview";
@@ -57,7 +57,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isTutorial = mode === "tutorial";
-  const maxTurns = isTutorial ? TUTORIAL_MAX_TURNS : MAX_TURNS;
+  const maxTurns = isTutorial
+    ? TUTORIAL_MAX_TURNS
+    : resolveMaxTurns(searchParams.get("maxTurns"));
   const configuredCompanyId = Number(searchParams.get("companyId"));
   const companyId =
     !isTutorial && Number.isSafeInteger(configuredCompanyId) && configuredCompanyId > 0
@@ -190,6 +192,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       requestNextQuestion({
         companyId,
         questionStrength,
+        maxTurns,
         history: nextTurns,
       })
         .then((nextQuestion) => {
@@ -275,12 +278,19 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           <span className="text-label text-ink-sub">
             ターン {currentTurn} / {maxTurns}
           </span>
-          <div className="flex gap-1">
+          <div
+            role="progressbar"
+            aria-label="完了したターン数"
+            aria-valuemin={0}
+            aria-valuemax={maxTurns}
+            aria-valuenow={answeredTurns}
+            className="flex max-w-[260px] gap-1"
+          >
             {Array.from({ length: maxTurns }, (_, index) => (
               <span
                 key={index}
                 className={cn(
-                  "block h-[5px] w-[26px] rounded-[2px]",
+                  "block h-[5px] w-[26px] min-w-0 rounded-[2px]",
                   index < answeredTurns ? "bg-accent" : "bg-[#dde1e4]",
                 )}
               />

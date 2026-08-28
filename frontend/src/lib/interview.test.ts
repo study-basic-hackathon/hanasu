@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_MAX_TURNS,
   FIRST_QUESTION,
-  MAX_TURNS,
+  MAX_MAX_TURNS,
+  MIN_MAX_TURNS,
   RECORDING_MAX_SECONDS,
   RECORDING_MIN_SECONDS,
   SILENCE_LIMIT_SECONDS,
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
   countFillers,
+  parseMaxTurns,
+  resolveMaxTurns,
 } from "@/lib/interview";
 
 describe("countFillers", () => {
@@ -24,7 +28,9 @@ describe("countFillers", () => {
 
 describe("面接進行の定数", () => {
   it("画面仕様どおりの制限値と開始質問を提供する", () => {
-    expect(MAX_TURNS).toBe(8);
+    expect(MIN_MAX_TURNS).toBe(1);
+    expect(DEFAULT_MAX_TURNS).toBe(10);
+    expect(MAX_MAX_TURNS).toBe(25);
     expect(TUTORIAL_MAX_TURNS).toBe(1);
     expect(SILENCE_LIMIT_SECONDS).toBe(3);
     expect(RECORDING_MIN_SECONDS).toBe(1);
@@ -32,4 +38,24 @@ describe("面接進行の定数", () => {
     expect(FIRST_QUESTION).toContain("自己紹介");
     expect(TUTORIAL_QUESTION).toBe("1分で自己紹介してください。");
   });
+});
+
+describe("最大ターン数", () => {
+  it.each(["1", "10", "25"])("有効な境界値 %s を受け付ける", (value) => {
+    expect(parseMaxTurns(value)).toBe(Number(value));
+  });
+
+  it.each([null, "", "0", "26", "1.5", "abc"])(
+    "不正値 %s を受け付けない",
+    (value) => {
+      expect(parseMaxTurns(value)).toBeNull();
+    },
+  );
+
+  it.each([null, "", "0", "26", "1.5", "abc"])(
+    "URL の欠落・不正値 %s は10ターンへフォールバックする",
+    (value) => {
+      expect(resolveMaxTurns(value)).toBe(10);
+    },
+  );
 });

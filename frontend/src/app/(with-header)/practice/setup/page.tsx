@@ -12,7 +12,12 @@ import { cn } from "@/lib/cn";
 import { listCompanies, type Company } from "@/lib/company-api";
 import type { AnswerMethod, QuestionStrength } from "@/lib/domain";
 import { ANSWER_METHOD_LABEL, QUESTION_STRENGTH_LABEL } from "@/lib/domain";
-import { MAX_TURNS } from "@/lib/interview";
+import {
+  DEFAULT_MAX_TURNS,
+  MAX_MAX_TURNS,
+  MIN_MAX_TURNS,
+  parseMaxTurns,
+} from "@/lib/interview";
 
 type Mode = "interview" | "practice";
 
@@ -50,6 +55,9 @@ export default function PracticeSetupPage() {
   const [mode, setMode] = useState<Mode>("interview");
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
   const [strength, setStrength] = useState<QuestionStrength>("standard");
+  const [maxTurnsInput, setMaxTurnsInput] = useState(
+    String(DEFAULT_MAX_TURNS),
+  );
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,8 +80,26 @@ export default function PracticeSetupPage() {
   }, []);
 
   const isPracticeMode = mode === "practice";
+  const maxTurns = parseMaxTurns(maxTurnsInput);
+  const maxTurnsError =
+    maxTurns === null
+      ? `最大ターン数は${MIN_MAX_TURNS}〜${MAX_MAX_TURNS}の整数で入力してください。`
+      : null;
   // 本番モードは対象企業が1つ選ばれていることが条件。練習モードは条件なし（S-05 5章）
-  const canStart = isPracticeMode || companyId !== null;
+  const canStart =
+    isPracticeMode || (companyId !== null && maxTurns !== null);
+
+  function adjustMaxTurns(amount: -1 | 1) {
+    const entered = Number(maxTurnsInput);
+    const base = Number.isSafeInteger(entered)
+      ? entered
+      : DEFAULT_MAX_TURNS;
+    const adjusted = Math.min(
+      MAX_MAX_TURNS,
+      Math.max(MIN_MAX_TURNS, base + amount),
+    );
+    setMaxTurnsInput(String(adjusted));
+  }
 
   return (
     <PageContainer width={960} className="flex flex-col gap-[22px]">
@@ -192,6 +218,57 @@ export default function PracticeSetupPage() {
             深掘りの度合いが変わります。強度は毎ターン面接官に伝わります。
           </p>
         </Card>
+
+        {!isPracticeMode && (
+          <Card className="flex flex-col gap-3.5 px-[26px] py-6">
+            <h2 className="text-card-sm font-bold">最大ターン数</h2>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                aria-label="最大ターン数を1減らす"
+                onClick={() => adjustMaxTurns(-1)}
+                className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
+              >
+                −
+              </button>
+              <input
+                id="max-turns"
+                type="number"
+                min={MIN_MAX_TURNS}
+                max={MAX_MAX_TURNS}
+                step={1}
+                inputMode="numeric"
+                aria-label="最大ターン数"
+                aria-invalid={maxTurnsError ? true : undefined}
+                aria-describedby={maxTurnsError ? "max-turns-error" : "max-turns-hint"}
+                value={maxTurnsInput}
+                onChange={(event) => setMaxTurnsInput(event.target.value)}
+                className={cn(
+                  "h-10 w-24 rounded-control border bg-surface px-3 text-center text-body outline-none focus:border-accent",
+                  maxTurnsError ? "border-danger" : "border-line-strong",
+                )}
+              />
+              <button
+                type="button"
+                aria-label="最大ターン数を1増やす"
+                onClick={() => adjustMaxTurns(1)}
+                className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
+              >
+                ＋
+              </button>
+              <span className="text-body-sm text-ink-sub">ターン</span>
+            </div>
+            {maxTurnsError ? (
+              <p id="max-turns-error" role="alert" className="text-note text-danger">
+                {maxTurnsError}
+              </p>
+            ) : (
+              <p id="max-turns-hint" className="text-note text-ink-muted">
+                {MIN_MAX_TURNS}〜{MAX_MAX_TURNS}ターンの範囲で設定できます。
+              </p>
+            )}
+          </Card>
+        )}
       </div>
 
       <Card className="flex flex-col">
@@ -291,7 +368,9 @@ export default function PracticeSetupPage() {
           {/* 練習モードを選んでいるあいだは出さない（S-05 5章） */}
           {!isPracticeMode && (
             <span className="text-label text-ink-muted">
-              上限 {MAX_TURNS} ターンで自動終了します
+              {maxTurns === null
+                ? "最大ターン数を確認してください"
+                : `上限 ${maxTurns} ターンで自動終了します`}
             </span>
           )}
           <Button
@@ -301,10 +380,12 @@ export default function PracticeSetupPage() {
                 router.push("/practice");
                 return;
               }
+              if (companyId === null || maxTurns === null) return;
               const params = new URLSearchParams({
                 companyId: String(companyId),
                 strength,
                 answerMethod,
+                maxTurns: String(maxTurns),
               });
               router.push(`/interview?${params.toString()}`);
             }}
