@@ -9,6 +9,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InterviewScreen } from "@/components/interview/InterviewScreen";
+import type { ChatTurn } from "@/lib/domain";
 import { FIRST_QUESTION } from "@/lib/interview";
 
 const mocks = vi.hoisted(() => ({
@@ -580,6 +581,31 @@ describe("InterviewScreen の読み上げモード", () => {
         "/evaluations/detail?id=88&from=interview",
       ),
     );
+  });
+
+  it("文字入力はフィラーを計数・表示せず、定量スコアなしで評価する", async () => {
+    mocks.search =
+      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=1";
+    render(<InterviewScreen mode="interview" />);
+
+    submitAnswer("えー、あの、文字入力の回答です。");
+
+    expect(await screen.findByText("お疲れ様でした")).toBeInTheDocument();
+    expect(screen.queryByText(/フィラー \d+ 回/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "評価を見る" }));
+
+    await waitFor(() => expect(mocks.createEvaluation).toHaveBeenCalledOnce());
+    const input = mocks.createEvaluation.mock.calls[0][0];
+    const textAnswer = input.turns.find(
+      (turn: ChatTurn) => turn.role === "user",
+    );
+    expect(textAnswer).toEqual(
+      expect.objectContaining({
+        content: "えー、あの、文字入力の回答です。",
+      }),
+    );
+    expect(textAnswer).not.toHaveProperty("filler_count");
+    expect(input.scores).toEqual({});
   });
 
   it("チュートリアルは1回答で終了し、終了表示だけではchat・TTS・評価を呼ばない", async () => {

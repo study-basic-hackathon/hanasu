@@ -253,7 +253,7 @@ function UnmeasuredScoreCard({ label }: { label: string }) {
       </div>
       <div className="h-2 rounded-control bg-track" />
       <p className="text-note leading-[1.8] text-ink-muted">
-        文字入力だけの面接では話す速さを計測しません。
+        計測できる音声回答がありません。
       </p>
     </Card>
   );

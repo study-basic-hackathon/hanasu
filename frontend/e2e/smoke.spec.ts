@@ -493,6 +493,7 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
   await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
   await page.getByRole("button", { name: "送信する" }).click();
   await expect(page.getByText("経験から学んだことを教えてください。")).toBeVisible();
+  await expect(page.getByText(/フィラー \d+ 回/)).toHaveCount(0);
 
   await page.getByRole("button", { name: "中断" }).click();
   await page.getByRole("button", { name: "取り消す" }).click();
@@ -508,6 +509,73 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
   await expect(page.getByText("計測対象外")).toHaveCount(2);
+
+  await page.goto("/");
+  await expect(page.getByText("計測対象外")).toHaveCount(2);
+
+  await page.goto("/evaluations");
+  const textEvaluationRow = page.locator(
+    'a[href="/evaluations/detail?id=88"]',
+  );
+  const scoreTracks = textEvaluationRow.locator(".bg-track");
+  await expect(scoreTracks).toHaveCount(3);
+  await expect(scoreTracks.nth(0).locator(":scope > div")).toHaveCount(0);
+  await expect(scoreTracks.nth(1).locator(":scope > div")).toHaveCount(0);
+  await expect(scoreTracks.nth(2).locator(":scope > div")).toHaveCount(1);
+});
+
+test("文字入力と音声回答の混在では音声の計測値だけを評価する", async ({
+  page,
+}) => {
+  await installFakeRecorder(page);
+  const sttRequestCount = await mockStt(page);
+  await page.route("http://localhost:8000/evaluations", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+
+    const body = route.request().postDataJSON();
+    expect(body).toMatchObject({
+      answer_method: "voice",
+      turn_count: 2,
+      scores: {
+        speaking_speed: { value: 150, unit: "文字/分" },
+        filler: { value: 1, unit: "回", value_per_minute: 30 },
+      },
+    });
+    expect(
+      body.turns.filter((turn: { role: string }) => turn.role === "user"),
+    ).toEqual([
+      { role: "user", content: "えー、回答です。" },
+      { role: "user", content: "%えー% 回答です。" },
+    ]);
+    return fulfillJson(route, { evaluation_id: 87 }, 202);
+  });
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=2",
+  );
+
+  await page
+    .getByPlaceholder("回答を入力してください")
+    .fill("えー、回答です。");
+  await page.getByRole("button", { name: "送信する" }).click();
+  await expect(
+    page.getByText("経験から学んだことを教えてください。"),
+  ).toBeVisible();
+  await expect(page.getByText(/フィラー \d+ 回/)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "音声で回答" }).click();
+  await page.getByRole("button", { name: "回答を録音する" }).click();
+  await page.waitForTimeout(1_100);
+  await page
+    .getByRole("button", { name: "録音を停止して送信する" })
+    .click();
+
+  await expect(page.getByText("フィラー 1 回")).toBeVisible();
+  await page.getByRole("button", { name: "評価を見る" }).click();
+
+  await expect(page).toHaveURL(
+    /\/evaluations\/detail\?id=87&from=interview$/,
+  );
+  expect(sttRequestCount()).toBe(1);
 });
 
 test("S-08 は回答前に確認と評価なしでホームへ戻れる", async ({ page }) => {
