@@ -73,9 +73,28 @@ async function mockApi(page: Page) {
         motivation: company.motivation,
         resume: company.resume,
         note: company.note,
-        job_summary: "編集後の募集要項の要約",
+        job_summary: "APIから取得した募集要項の要約",
       });
       return fulfillJson(route, { ...company, ...body });
+    }
+    if (pathname === "/job-postings/summary" && request.method() === "POST") {
+      const body = request.postDataJSON();
+      if (body.company_url === "https://example.com/jobs/fail") {
+        return fulfillJson(
+          route,
+          {
+            detail: {
+              code: "summary_failed",
+              message: "募集要項の要約を生成できませんでした。",
+            },
+          },
+          503,
+        );
+      }
+      expect(body).toEqual({ company_url: company.company_url });
+      return fulfillJson(route, {
+        summary: "APIから取得した募集要項の要約",
+      });
     }
     if (pathname === "/interviews/chat") {
       const body = request.postDataJSON();
@@ -313,22 +332,42 @@ test("S-05〜S-07で応募企業情報を6項目として表示・検証・編�
   await expect(page.getByLabel("経験年数")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "募集要項の要約", exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
 
   await page.getByLabel("募集要項 URL").fill("ftp://example.com/jobs/1");
-  await page.getByLabel("募集要項の要約").fill("要".repeat(4_001));
+  await page.getByLabel("募集要項の要約").fill("要約");
   await page.getByRole("button", { name: "保存する" }).click();
   await expect(
     page.getByText(
       "http:// または https:// で始まる URL を入力してください。",
     ),
   ).toBeVisible();
+
+  await page.getByLabel("募集要項の要約").fill("要".repeat(4_001));
   await expect(
     page.getByText("募集要項の要約は4,000文字以内で入力してください。"),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "保存する" })).toBeDisabled();
+
+  await page.getByLabel("募集要項 URL").fill("https://example.com/jobs/fail");
+  await page.getByLabel("募集要項の要約").fill("失敗前の要約");
+  await page
+    .getByRole("button", { name: "募集要項の要約", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "募集要項の要約を取得できませんでした。時間をおいてもう一度お試しください。",
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel("募集要項の要約")).toHaveValue("失敗前の要約");
 
   await page.getByLabel("募集要項 URL").fill(company.company_url);
-  await page.getByLabel("募集要項の要約").fill("編集後の募集要項の要約");
+  await page
+    .getByRole("button", { name: "募集要項の要約", exact: true })
+    .click();
+  await expect(page.getByLabel("募集要項の要約")).toHaveValue(
+    "APIから取得した募集要項の要約",
+  );
   await page.getByRole("button", { name: "保存する" }).click();
 
   await expect(page).toHaveURL(/\/companies$/);

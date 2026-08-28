@@ -7,6 +7,7 @@ import type { Company } from "@/lib/company-api";
 const mocks = vi.hoisted(() => ({
   createCompany: vi.fn(),
   push: vi.fn(),
+  summarizeJobPosting: vi.fn(),
   updateCompany: vi.fn(),
 }));
 
@@ -17,6 +18,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/company-api", () => ({
   createCompany: mocks.createCompany,
   updateCompany: mocks.updateCompany,
+}));
+
+vi.mock("@/lib/job-posting-api", () => ({
+  summarizeJobPosting: mocks.summarizeJobPosting,
 }));
 
 const company: Company = {
@@ -38,6 +43,7 @@ describe("ApplicationForm", () => {
       value: vi.fn(),
     });
     mocks.createCompany.mockResolvedValue(company);
+    mocks.summarizeJobPosting.mockResolvedValue("取得した募集要項の要約");
     mocks.updateCompany.mockResolvedValue(company);
   });
 
@@ -75,7 +81,140 @@ describe("ApplicationForm", () => {
       expect(screen.queryByLabelText(removedLabel)).not.toBeInTheDocument();
     }
     expect(
-      screen.queryByRole("button", { name: "募集要項の要約" }),
+      screen.getByRole("button", { name: "募集要項の要約" }),
+    ).toBeEnabled();
+  });
+
+  it("URLが空または形式不正の間は理由を表示して要約できない", () => {
+    render(<ApplicationForm returnTo="/companies" />);
+
+    const summarizeButton = screen.getByRole("button", {
+      name: "募集要項の要約",
+    });
+    expect(summarizeButton).toBeDisabled();
+    expect(
+      screen.getByText("有効な募集要項URLを入力してください。"),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "募集要項 URL" }), {
+      target: { value: "ftp://example.com/jobs/1" },
+    });
+    expect(summarizeButton).toBeDisabled();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "募集要項 URL" }), {
+      target: { value: "https://example.com/jobs/1" },
+    });
+    expect(summarizeButton).toBeEnabled();
+    expect(
+      screen.queryByText("有効な募集要項URLを入力してください。"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("要約APIを1回だけ呼び、処理中表示の後に編集可能な要約へ反映する", async () => {
+    let resolveSummary!: (summary: string) => void;
+    mocks.summarizeJobPosting.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSummary = resolve;
+        }),
+    );
+    render(<ApplicationForm company={company} returnTo="/companies" />);
+
+    const summarizeButton = screen.getByRole("button", {
+      name: "募集要項の要約",
+    });
+    fireEvent.click(summarizeButton);
+    fireEvent.click(summarizeButton);
+
+    expect(mocks.summarizeJobPosting).toHaveBeenCalledOnce();
+    expect(mocks.summarizeJobPosting).toHaveBeenCalledWith(company.company_url);
+    expect(
+      screen.getByRole("button", { name: "要約しています" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存する" })).toBeDisabled();
+
+    resolveSummary("APIから取得した要約");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: "募集要項の要約" }),
+      ).toHaveValue("APIから取得した要約"),
+    );
+    expect(
+      screen.getByRole("button", { name: "募集要項の要約" }),
+    ).toBeEnabled();
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "募集要項の要約" }),
+      { target: { value: "利用者が編集した要約" } },
+    );
+    expect(
+      screen.getByRole("textbox", { name: "募集要項の要約" }),
+    ).toHaveValue("利用者が編集した要約");
+  });
+
+  it("4,000文字を超える要約を切り詰めずに表示し、修正されるまで保存させない", async () => {
+    mocks.summarizeJobPosting.mockResolvedValue("要".repeat(4_001));
+    render(<ApplicationForm company={company} returnTo="/companies" />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "募集要項の要約" }),
+    );
+
+    const summaryInput = screen.getByRole("textbox", {
+      name: "募集要項の要約",
+    });
+    await waitFor(() => expect(summaryInput).toHaveValue("要".repeat(4_001)));
+    expect(
+      screen.getByText("募集要項の要約は4,000文字以内で入力してください。"),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "保存する" })).toBeDisabled();
+    expect(mocks.updateCompany).not.toHaveBeenCalled();
+
+    fireEvent.change(summaryInput, { target: { value: "修正済みの要約" } });
+    expect(
+      screen.queryByText("募集要項の要約は4,000文字以内で入力してください。"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存する" })).toBeEnabled();
+  });
+
+  it("要約APIの失敗時にURLと既存要約を保持し、再試行できる", async () => {
+    mocks.summarizeJobPosting
+      .mockRejectedValueOnce(new Error("summary failed"))
+      .mockResolvedValueOnce("再試行で取得した要約");
+    render(<ApplicationForm company={company} returnTo="/companies" />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "募集要項の要約" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "募集要項の要約を取得できませんでした。時間をおいてもう一度お試しください。",
+        ),
+      ).toBeVisible(),
+    );
+    expect(screen.getByRole("textbox", { name: "募集要項 URL" })).toHaveValue(
+      company.company_url,
+    );
+    expect(
+      screen.getByRole("textbox", { name: "募集要項の要約" }),
+    ).toHaveValue(company.job_summary);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "募集要項の要約" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: "募集要項の要約" }),
+      ).toHaveValue("再試行で取得した要約"),
+    );
+    expect(mocks.summarizeJobPosting).toHaveBeenCalledTimes(2);
+    expect(
+      screen.queryByText(
+        "募集要項の要約を取得できませんでした。時間をおいてもう一度お試しください。",
+      ),
     ).not.toBeInTheDocument();
   });
 
