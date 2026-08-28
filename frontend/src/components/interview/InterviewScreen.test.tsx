@@ -54,6 +54,7 @@ const company = {
   resume: null,
   company_url: null,
   note: null,
+  job_summary: null,
   created_at: "2026-08-28T00:00:00Z",
 };
 

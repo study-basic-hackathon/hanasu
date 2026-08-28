@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { filledSections } from "@/lib/application";
 import {
   deleteCompany,
   listCompanies,
@@ -17,12 +18,7 @@ const COLUMNS = "grid-cols-[1fr_200px_150px]";
 
 /** 「登録済みの情報」（S-06 3.1） */
 function RegisteredInfo({ company }: { company: Company }) {
-  const sections = [
-    company.company_url ? "募集要項" : null,
-    company.motivation ? "志望動機" : null,
-    company.resume ? "経歴" : null,
-    company.note ? "備考" : null,
-  ].filter((section): section is string => section !== null);
+  const sections = filledSections(company);
 
   // 区分が1つだけなら `<区分名>のみ`、0なら `未入力`。どちらも注意色で示す
   if (sections.length <= 1) {
@@ -131,7 +127,7 @@ export default function CompaniesPage() {
           <div
             className={`grid ${COLUMNS} border-b border-line bg-[#fafbfb] px-6 py-3 text-note font-medium text-ink-sub`}
           >
-            <span>企業名 / 職種</span>
+            <span>企業名</span>
             <span>登録済みの情報</span>
             <span className="text-right">操作</span>
           </div>

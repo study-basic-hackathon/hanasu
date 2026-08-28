@@ -23,6 +23,7 @@ const company = {
   resume: null,
   company_url: null,
   note: null,
+  job_summary: null,
   created_at: "2026-08-28T00:00:00Z",
 };
 
@@ -66,5 +67,16 @@ describe("PracticeSetupPage の読み上げモード", () => {
     expect(mocks.push).toHaveBeenCalledWith(
       "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=enabled&maxTurns=10",
     );
+  });
+
+  it("募集要項の要約を登録済み情報として表示する", async () => {
+    mocks.listCompanies.mockResolvedValue([
+      { ...company, motivation: null, job_summary: "募集要項の要約" },
+    ]);
+
+    render(<PracticeSetupPage />);
+
+    expect(await screen.findByText("募集要項")).toBeVisible();
+    expect(screen.queryByText(/職種/)).not.toBeInTheDocument();
   });
 });

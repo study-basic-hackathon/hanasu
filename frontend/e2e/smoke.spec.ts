@@ -7,6 +7,7 @@ const company = {
   resume: "Web アプリケーション開発を3年間経験しました。",
   company_url: "https://example.com/jobs/1",
   note: null,
+  job_summary: "自社サービスのバックエンド開発を担当する募集です。",
   created_at: "2026-08-20T03:00:00Z",
 };
 
@@ -47,6 +48,18 @@ async function mockApi(page: Page) {
     }
     if (pathname === "/companies/1" && request.method() === "GET") {
       return fulfillJson(route, company);
+    }
+    if (pathname === "/companies/1" && request.method() === "PUT") {
+      const body = request.postDataJSON();
+      expect(body).toEqual({
+        company_name: company.company_name,
+        company_url: company.company_url,
+        motivation: company.motivation,
+        resume: company.resume,
+        note: company.note,
+        job_summary: "編集後の募集要項の要約",
+      });
+      return fulfillJson(route, { ...company, ...body });
     }
     if (pathname === "/interviews/chat") {
       const body = request.postDataJSON();
@@ -249,6 +262,60 @@ test("静的な詳細 URL から企業編集と評価結果を表示できる", 
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "アドバイス" })).toBeVisible();
+});
+
+test("S-05〜S-07で応募企業情報を6項目として表示・検証・編集できる", async ({
+  page,
+}) => {
+  await page.goto("/companies");
+
+  await expect(
+    page.getByText("募集要項 / 志望動機 / 経歴", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText("企業名", { exact: true })).toBeVisible();
+  await expect(page.getByText("企業名 / 職種", { exact: true })).toHaveCount(0);
+
+  await page.goto("/practice/setup");
+  await expect(
+    page.getByText("募集要項 / 志望動機 / 経歴", { exact: true }),
+  ).toBeVisible();
+
+  await page.goto("/companies/edit?id=1");
+  await expect(page.getByLabel("企業名")).toHaveValue(company.company_name);
+  await expect(page.getByLabel("募集要項 URL")).toHaveValue(
+    company.company_url,
+  );
+  await expect(page.getByLabel("志望動機")).toHaveValue(company.motivation);
+  await expect(page.getByLabel("経歴・実績")).toHaveValue(company.resume);
+  await expect(page.getByLabel("備考")).toHaveValue("");
+  await expect(page.getByLabel("募集要項の要約")).toHaveValue(
+    company.job_summary,
+  );
+  await expect(page.getByLabel("職種")).toHaveCount(0);
+  await expect(page.getByLabel("応募書類（貼り付け）")).toHaveCount(0);
+  await expect(page.getByLabel("現職 / 直近の所属")).toHaveCount(0);
+  await expect(page.getByLabel("経験年数")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "募集要項の要約", exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByLabel("募集要項 URL").fill("ftp://example.com/jobs/1");
+  await page.getByLabel("募集要項の要約").fill("要".repeat(4_001));
+  await page.getByRole("button", { name: "保存する" }).click();
+  await expect(
+    page.getByText(
+      "http:// または https:// で始まる URL を入力してください。",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("募集要項の要約は4,000文字以内で入力してください。"),
+  ).toBeVisible();
+
+  await page.getByLabel("募集要項 URL").fill(company.company_url);
+  await page.getByLabel("募集要項の要約").fill("編集後の募集要項の要約");
+  await page.getByRole("button", { name: "保存する" }).click();
+
+  await expect(page).toHaveURL(/\/companies$/);
 });
 
 test("文字回答から chat と評価 API を呼び評価結果へ遷移できる", async ({ page }) => {

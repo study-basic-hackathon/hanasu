@@ -8,6 +8,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { filledSections } from "@/lib/application";
 import { cn } from "@/lib/cn";
 import { listCompanies, type Company } from "@/lib/company-api";
 import type {
@@ -44,15 +45,6 @@ function RadioMark({ selected }: { selected: boolean }) {
       )}
     />
   );
-}
-
-function filledCompanySections(company: Company): string[] {
-  return [
-    company.company_url ? "募集要項" : null,
-    company.motivation ? "志望動機" : null,
-    company.resume ? "経歴" : null,
-    company.note ? "備考" : null,
-  ].filter((section): section is string => section !== null);
 }
 
 /**
@@ -349,7 +341,7 @@ export default function PracticeSetupPage() {
           >
             {companies.map((company) => {
               const selected = companyId === company.id;
-              const sections = filledCompanySections(company);
+              const sections = filledSections(company);
               return (
                 <div
                   key={company.id}
@@ -375,15 +367,10 @@ export default function PracticeSetupPage() {
                       >
                         {company.company_name}
                       </span>
-                      {/* 何も入っていなければ職種だけを出す（S-05 3.2） */}
                       <span className="text-note text-ink-sub">
-                        {[
-                          sections.length > 0
-                            ? `${sections.join("・")}あり`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" / ")}
+                        {sections.length > 0
+                          ? sections.join(" / ")
+                          : "未入力"}
                       </span>
                     </span>
                   </button>
