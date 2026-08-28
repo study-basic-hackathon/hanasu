@@ -26,6 +26,7 @@ export async function transcribeAudio(
 export async function requestNextQuestion(input: {
   companyId: number;
   questionStrength: QuestionStrength;
+  maxTurns: number;
   history: ChatTurn[];
 }): Promise<string> {
   const response = await jsonRequest<{ text: string }>(
@@ -34,6 +35,7 @@ export async function requestNextQuestion(input: {
     {
       company_id: input.companyId,
       question_strength: input.questionStrength,
+      max_turns: input.maxTurns,
       history: input.history.map((turn) => ({
         role: turn.role,
         content: turn.raw_content ?? turn.content,

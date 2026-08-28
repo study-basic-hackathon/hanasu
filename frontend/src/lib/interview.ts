@@ -3,8 +3,10 @@
  * サーバーは終了を判断しないため、ターン数の上限と最初の質問はフロントが持つ（ADR-0008）。
  */
 
-/** ターン数の上限（本番モード） */
-export const MAX_TURNS = 8;
+/** 本番モードの最大ターン数。S-05 でこの範囲の整数を設定する。 */
+export const MIN_MAX_TURNS = 1;
+export const DEFAULT_MAX_TURNS = 10;
+export const MAX_MAX_TURNS = 25;
 
 /** チュートリアルは自己紹介1問で終わる（S-08 9章） */
 export const TUTORIAL_MAX_TURNS = 1;
@@ -15,6 +17,23 @@ export const FIRST_QUESTION =
 
 /** チュートリアルの質問は固定（S-08 9章） */
 export const TUTORIAL_QUESTION = "1分で自己紹介してください。";
+
+/** S-05 の入力値を検証する。範囲外・小数・数値以外は受け付けない。 */
+export function parseMaxTurns(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) return null;
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) &&
+    parsed >= MIN_MAX_TURNS &&
+    parsed <= MAX_MAX_TURNS
+    ? parsed
+    : null;
+}
+
+/** S-08 の URL に有効な設定がなければ既定値へフォールバックする。 */
+export function resolveMaxTurns(value: string | null): number {
+  return parseMaxTurns(value) ?? DEFAULT_MAX_TURNS;
+}
 
 /** 無音での自動停止（秒）。無音がこの長さ続いたら停止して送信する（S-08 6.1） */
 export const SILENCE_LIMIT_SECONDS = 3;

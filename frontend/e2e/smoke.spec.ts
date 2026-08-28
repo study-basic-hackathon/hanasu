@@ -53,6 +53,7 @@ async function mockApi(page: Page) {
       expect(body).toMatchObject({
         company_id: 1,
         question_strength: "hard",
+        max_turns: 2,
       });
       expect(body.history.at(-1)).toEqual({
         role: "user",
@@ -155,7 +156,7 @@ test("静的な詳細 URL から企業編集と評価結果を表示できる", 
 
 test("文字回答から chat と評価 API を呼び評価結果へ遷移できる", async ({ page }) => {
   await page.goto(
-    "/interview?companyId=1&strength=hard&answerMethod=text",
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=2",
   );
 
   await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
@@ -172,4 +173,53 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
   await expect(page.getByText("計測対象外")).toBeVisible();
+});
+
+test("設定画面で最大ターン数を1〜25の整数として設定できる", async ({ page }) => {
+  await page.goto("/practice/setup");
+
+  const input = page.getByRole("spinbutton", { name: "最大ターン数" });
+  const startButton = page.getByRole("button", { name: "開始する" });
+  await expect(input).toHaveValue("10");
+
+  await page.getByRole("button", { name: "最大ターン数を1減らす" }).click();
+  await expect(input).toHaveValue("9");
+  await page.getByRole("button", { name: "最大ターン数を1増やす" }).click();
+  await expect(input).toHaveValue("10");
+
+  await page.getByRole("button", { name: company.company_name }).click();
+  await input.fill("0");
+  await expect(
+    page.getByText("最大ターン数は1〜25の整数で入力してください。"),
+  ).toBeVisible();
+  await expect(startButton).toBeDisabled();
+
+  await input.fill("25");
+  await expect(startButton).toBeEnabled();
+  await startButton.click();
+
+  await expect(page).toHaveURL(/maxTurns=25/);
+  await expect(page.getByText("ターン 1 / 25")).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "完了したターン数" }))
+    .toHaveAttribute("aria-valuemax", "25");
+});
+
+test("1ターンで自動終了し、不正なURL値は10、チュートリアルは1に固定する", async ({ page }) => {
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=0",
+  );
+  await expect(page.getByText("ターン 1 / 10")).toBeVisible();
+
+  await page.goto("/tutorial?maxTurns=25");
+  await expect(page.getByText("ターン 1 / 1")).toBeVisible();
+
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=1",
+  );
+  await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
+  await page.getByRole("button", { name: "送信する" }).click();
+
+  await expect(page).toHaveURL(
+    /\/evaluations\/detail\?id=88&from=interview$/,
+  );
 });
