@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_MAX_TURNS,
+  DEFAULT_READ_ALOUD_MODE,
   FIRST_QUESTION,
   MAX_MAX_TURNS,
   MIN_MAX_TURNS,
@@ -13,6 +14,7 @@ import {
   countFillers,
   parseMaxTurns,
   resolveMaxTurns,
+  resolveReadAloudMode,
 } from "@/lib/interview";
 
 describe("countFillers", () => {
@@ -56,6 +58,21 @@ describe("最大ターン数", () => {
     "URL の欠落・不正値 %s は10ターンへフォールバックする",
     (value) => {
       expect(resolveMaxTurns(value)).toBe(10);
+    },
+  );
+});
+
+describe("読み上げモード", () => {
+  it("有効なURL値をそのまま採用する", () => {
+    expect(resolveReadAloudMode("enabled")).toBe("enabled");
+    expect(resolveReadAloudMode("disabled")).toBe("disabled");
+  });
+
+  it.each([null, "", "true", "invalid"])(
+    "URLの欠落・不正値 %s は読み上げないへフォールバックする",
+    (value) => {
+      expect(DEFAULT_READ_ALOUD_MODE).toBe("disabled");
+      expect(resolveReadAloudMode(value)).toBe("disabled");
     },
   );
 });

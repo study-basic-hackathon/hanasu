@@ -1,3 +1,5 @@
+import type { ReadAloudMode } from "@/lib/domain";
+
 /**
  * 面接の進行に関する値（S-08 の詳細仕様）。
  * サーバーは終了を判断しないため、ターン数の上限と最初の質問はフロントが持つ（ADR-0008）。
@@ -7,6 +9,15 @@
 export const MIN_MAX_TURNS = 1;
 export const DEFAULT_MAX_TURNS = 10;
 export const MAX_MAX_TURNS = 25;
+
+/** 読み上げ設定がURLにない、または不正な場合は自動読み上げを行わない。 */
+export const DEFAULT_READ_ALOUD_MODE: ReadAloudMode = "disabled";
+
+export function resolveReadAloudMode(value: string | null): ReadAloudMode {
+  return value === "enabled" || value === "disabled"
+    ? value
+    : DEFAULT_READ_ALOUD_MODE;
+}
 
 /** チュートリアルは自己紹介1問で終わる（S-08 9章） */
 export const TUTORIAL_MAX_TURNS = 1;

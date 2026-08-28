@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import type { ChatTurn } from "@/lib/domain";
@@ -10,7 +10,13 @@ import { synthesizeSpeech } from "@/lib/interview-api";
  * 会話ログの1件（S-08 5章）。
  * 面接官は左・白い吹き出し、自分は右・アクセント色の吹き出し。
  */
-export function ChatMessage({ turn }: { turn: ChatTurn }) {
+export function ChatMessage({
+  turn,
+  speechStopSignal,
+}: {
+  turn: ChatTurn;
+  speechStopSignal: number;
+}) {
   const isSelf = turn.role === "user";
 
   return (
@@ -47,7 +53,11 @@ export function ChatMessage({ turn }: { turn: ChatTurn }) {
           ) : (
             <>
               {turn.time && <span>{turn.time}</span>}
-              <SpeakButton text={turn.content} />
+              {/* 読み上げないへの切替時は再生処理を破棄し、手動操作は通常表示へ戻す。 */}
+              <SpeakButton
+                key={speechStopSignal}
+                text={turn.content}
+              />
             </>
           )}
         </div>
@@ -89,15 +99,17 @@ function SpeakButton({ text }: { text: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const operationIdRef = useRef(0);
 
-  function release() {
+  const release = useCallback(() => {
+    operationIdRef.current += 1;
     audioRef.current?.pause();
     audioRef.current = null;
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     objectUrlRef.current = null;
-  }
+  }, []);
 
-  useEffect(() => release, []);
+  useEffect(() => release, [release]);
 
   async function toggleSpeech() {
     if (status === "playing") {
@@ -107,8 +119,10 @@ function SpeakButton({ text }: { text: string }) {
     }
 
     setStatus("loading");
+    const operationId = ++operationIdRef.current;
     try {
       const blob = await synthesizeSpeech(text);
+      if (operationId !== operationIdRef.current) return;
       const objectUrl = URL.createObjectURL(blob);
       const audio = new Audio(objectUrl);
       objectUrlRef.current = objectUrl;
@@ -122,8 +136,10 @@ function SpeakButton({ text }: { text: string }) {
         setStatus("error");
       });
       await audio.play();
+      if (operationId !== operationIdRef.current) return;
       setStatus("playing");
     } catch {
+      if (operationId !== operationIdRef.current) return;
       release();
       setStatus("error");
     }

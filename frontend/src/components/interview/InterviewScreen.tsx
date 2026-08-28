@@ -18,6 +18,7 @@ import type {
   AnswerMethod,
   ChatTurn,
   QuestionStrength,
+  ReadAloudMode,
 } from "@/lib/domain";
 import { createEvaluation } from "@/lib/evaluation-api";
 import { buildEvaluationScores } from "@/lib/evaluation-score";
@@ -25,11 +26,13 @@ import { storeEvaluationSession } from "@/lib/evaluation-session";
 import {
   ANSWER_METHOD_LABEL,
   QUESTION_STRENGTH_LABEL,
+  READ_ALOUD_MODE_LABEL,
 } from "@/lib/domain";
 import {
   countFillers,
   FIRST_QUESTION,
   resolveMaxTurns,
+  resolveReadAloudMode,
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
 } from "@/lib/interview";
@@ -37,6 +40,8 @@ import { requestNextQuestion } from "@/lib/interview-api";
 
 /** S-08 本番モードと、それを流用する S-03 チュートリアル（S-08 9章） */
 export type InterviewMode = "interview" | "tutorial";
+
+const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
 
 function questionStrengthOf(value: string | null): QuestionStrength | null {
   return value === "easy" || value === "standard" || value === "hard"
@@ -69,6 +74,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     questionStrengthOf(searchParams.get("strength")) ?? "standard";
   const configuredAnswerMethod =
     answerMethodOf(searchParams.get("answerMethod")) ?? "voice";
+  const configuredReadAloudMode = resolveReadAloudMode(
+    searchParams.get("readAloud"),
+  );
 
   const [turns, setTurns] = useState<ChatTurn[]>(() =>
     isTutorial
@@ -78,6 +86,10 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>(
     configuredAnswerMethod,
   );
+  const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
+    configuredReadAloudMode,
+  );
+  const [speechStopSignal, setSpeechStopSignal] = useState(0);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [waiting, setWaiting] = useState(false);
@@ -274,6 +286,36 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           <Chip tone="muted" className="px-2.5 py-[5px] text-label">
             回答方式：{ANSWER_METHOD_LABEL[answerMethod]}
           </Chip>
+          {!isTutorial && (
+            <div className="flex items-center gap-2 text-label text-ink-sub">
+              <span>読み上げ：</span>
+              <div className="flex overflow-hidden rounded-control border border-line-strong">
+                {READ_ALOUD_MODES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
+                    aria-pressed={readAloudMode === value}
+                    onClick={() => {
+                      if (value === readAloudMode) return;
+                      setReadAloudMode(value);
+                      if (value === "disabled") {
+                        setSpeechStopSignal((current) => current + 1);
+                      }
+                    }}
+                    className={cn(
+                      "h-7 px-2.5 text-note",
+                      readAloudMode === value
+                        ? "bg-accent font-medium text-white"
+                        : "bg-surface text-ink-label hover:bg-canvas",
+                    )}
+                  >
+                    {READ_ALOUD_MODE_LABEL[value]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-label text-ink-sub">
@@ -304,7 +346,11 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       <div className="flex-1 overflow-y-auto py-8">
         <div className="mx-auto flex w-[880px] flex-col gap-[22px]">
           {turns.map((turn, index) => (
-            <ChatMessage key={index} turn={turn} />
+            <ChatMessage
+              key={index}
+              turn={turn}
+              speechStopSignal={speechStopSignal}
+            />
           ))}
           {waiting && <ThinkingMessage />}
           <div ref={logEndRef} />
