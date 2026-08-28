@@ -1,4 +1,4 @@
-import { apiRequest, jsonRequest } from "@/lib/api-client";
+import { apiRequest } from "@/lib/api-client";
 import type { ChatTurn, QuestionStrength } from "@/lib/domain";
 
 export type Transcription = {
@@ -38,16 +38,19 @@ export async function transcribeAudio(
   });
 }
 
-export async function requestNextQuestion(input: {
-  companyId: number;
-  questionStrength: QuestionStrength;
-  maxTurns: number;
-  history: ChatTurn[];
-}): Promise<string> {
-  const response = await jsonRequest<{ text: string }>(
-    "/interviews/chat",
-    "POST",
-    {
+export async function requestNextQuestion(
+  input: {
+    companyId: number;
+    questionStrength: QuestionStrength;
+    maxTurns: number;
+    history: ChatTurn[];
+  },
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await apiRequest<{ text: string }>("/interviews/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
       company_id: input.companyId,
       question_strength: input.questionStrength,
       max_turns: input.maxTurns,
@@ -55,8 +58,9 @@ export async function requestNextQuestion(input: {
         role: turn.role,
         content: turn.raw_content ?? turn.content,
       })),
-    },
-  );
+    }),
+    signal,
+  });
   return response.text;
 }
 

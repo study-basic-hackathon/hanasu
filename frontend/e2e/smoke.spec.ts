@@ -382,8 +382,12 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
   await page.getByRole("button", { name: "送信する" }).click();
   await expect(page.getByText("経験から学んだことを教えてください。")).toBeVisible();
 
-  await page.getByRole("button", { name: "面接を終える" }).click();
-  await page.getByRole("button", { name: "評価に進む" }).click();
+  await page.getByRole("button", { name: "中断" }).click();
+  await page.getByRole("button", { name: "取り消す" }).click();
+  await expect(page.getByText("えー、回答です。", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "中断" }).click();
+  await page.getByRole("button", { name: "中断して評価に進む" }).click();
 
   await expect(page).toHaveURL(
     /\/evaluations\/detail\?id=88&from=interview$/,
@@ -392,6 +396,31 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
     page.getByRole("heading", { name: "合否の目安：通過見込み" }),
   ).toBeVisible();
   await expect(page.getByText("計測対象外")).toHaveCount(2);
+});
+
+test("S-08 からホームへ戻ると評価を作成しない", async ({ page }) => {
+  let evaluationRequestCount = 0;
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname === "/evaluations" &&
+      request.method() === "POST"
+    ) {
+      evaluationRequestCount += 1;
+    }
+  });
+  await page.goto(
+    "/interview?companyId=1&strength=hard&answerMethod=text&maxTurns=2",
+  );
+  await page.getByPlaceholder("回答を入力してください").fill("えー、回答です。");
+  await page.getByRole("button", { name: "送信する" }).click();
+  await expect(page.getByText("経験から学んだことを教えてください。")).toBeVisible();
+
+  await page.getByRole("button", { name: "ホーム" }).click();
+  await page.getByRole("button", { name: "ホームに戻る" }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
+  expect(evaluationRequestCount).toBe(0);
 });
 
 test("S-08 の音声回答を STT へ1回だけ送り clean 表示・raw 会話を使う", async ({

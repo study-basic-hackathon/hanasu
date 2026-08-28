@@ -30,6 +30,8 @@ type AnswerPanelProps = {
   onSubmit: (content: string, detail?: AnswerDetail) => void;
   waiting?: boolean;
   disabled?: boolean;
+  /** 面接の終了時に録音・文字起こし・入力中の一時データを破棄する。 */
+  exitSignal?: AbortSignal;
 };
 
 const METHOD_LABEL: Record<AnswerMethod, string> = {
@@ -74,6 +76,7 @@ export function AnswerPanel({
   onSubmit,
   waiting = false,
   disabled = false,
+  exitSignal,
 }: AnswerPanelProps) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState<RecordingState>("idle");
@@ -90,6 +93,8 @@ export function AnswerPanel({
   const discardRef = useRef(false);
   const hasSpokenRef = useRef(false);
   const silentFromRef = useRef<number | null>(null);
+  const sttControllerRef = useRef<AbortController | null>(null);
+  const disposedRef = useRef(false);
 
   const releaseAudio = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -99,10 +104,38 @@ export function AnswerPanel({
     analyserRef.current = null;
   }, []);
 
+  const discardTemporaryState = useCallback(() => {
+    discardRef.current = true;
+    sttControllerRef.current?.abort();
+    sttControllerRef.current = null;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    recorderRef.current = null;
+    chunksRef.current = [];
+    releaseAudio();
+    setText("");
+    setRecording("idle");
+    setElapsed(0);
+    setSilence(0);
+    setLevels(initialLevels());
+    setNotice(null);
+  }, [releaseAudio]);
+
   useEffect(() => {
+    if (!exitSignal || exitSignal.aborted) return;
+    exitSignal.addEventListener("abort", discardTemporaryState);
+    return () => exitSignal.removeEventListener("abort", discardTemporaryState);
+  }, [discardTemporaryState, exitSignal]);
+
+  useEffect(() => {
+    disposedRef.current = false;
     return () => {
+      disposedRef.current = true;
       discardRef.current = true;
+      sttControllerRef.current?.abort();
+      sttControllerRef.current = null;
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      recorderRef.current = null;
+      chunksRef.current = [];
       releaseAudio();
     };
   }, [releaseAudio]);
@@ -167,6 +200,7 @@ export function AnswerPanel({
   }, [recording, stopRecording]);
 
   async function startRecording() {
+    if (disposedRef.current || exitSignal?.aborted) return;
     setNotice(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setNotice(
@@ -179,6 +213,10 @@ export function AnswerPanel({
     setRecording("requesting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (disposedRef.current || exitSignal?.aborted) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const audioContext = new AudioContext();
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
@@ -210,6 +248,7 @@ export function AnswerPanel({
           discardRef.current = false;
           return;
         }
+        if (disposedRef.current || exitSignal?.aborted) return;
         if (seconds < RECORDING_MIN_SECONDS) {
           setRecording("idle");
           setNotice("録音が短すぎます。もう一度お試しください。");
@@ -217,8 +256,18 @@ export function AnswerPanel({
         }
 
         setRecording("transcribing");
-        transcribeAudio(audio)
+        const sttController = new AbortController();
+        sttControllerRef.current?.abort();
+        sttControllerRef.current = sttController;
+        transcribeAudio(audio, sttController.signal)
           .then((result) => {
+            if (
+              disposedRef.current ||
+              exitSignal?.aborted ||
+              sttController.signal.aborted
+            ) {
+              return;
+            }
             setRecording("idle");
             onSubmit(result.clean_transcript, {
               rawContent: result.raw_transcript,
@@ -231,8 +280,20 @@ export function AnswerPanel({
             });
           })
           .catch((error: unknown) => {
+            if (
+              disposedRef.current ||
+              exitSignal?.aborted ||
+              sttController.signal.aborted
+            ) {
+              return;
+            }
             setRecording("idle");
             setNotice(transcriptionFailureMessage(error));
+          })
+          .finally(() => {
+            if (sttControllerRef.current === sttController) {
+              sttControllerRef.current = null;
+            }
           });
       });
 
@@ -254,6 +315,7 @@ export function AnswerPanel({
 
   const isRecording = recording === "recording";
   const isBusy = recording !== "idle";
+  const hasExited = exitSignal?.aborted ?? false;
   const remainingSilence = Math.max(0, SILENCE_LIMIT_SECONDS - silence);
 
   return (
@@ -265,7 +327,7 @@ export function AnswerPanel({
               key={method}
               type="button"
               aria-pressed={answerMethod === method}
-              disabled={isBusy || disabled}
+              disabled={isBusy || disabled || hasExited}
               onClick={() => {
                 setNotice(null);
                 onChangeAnswerMethod(method);
@@ -342,7 +404,7 @@ export function AnswerPanel({
                 <button
                   type="button"
                   aria-label="回答を録音する"
-                  disabled={isBusy || waiting || disabled}
+                  disabled={isBusy || waiting || disabled || hasExited}
                   onClick={startRecording}
                   className="grid size-16 flex-none place-items-center rounded-full bg-accent shadow-[0_0_0_6px_#e4efee] disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -364,7 +426,7 @@ export function AnswerPanel({
           <textarea
             rows={3}
             value={text}
-            disabled={waiting || disabled}
+            disabled={waiting || disabled || hasExited}
             placeholder="回答を入力してください"
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -379,7 +441,7 @@ export function AnswerPanel({
             <span className="text-note text-ink-muted">Ctrl + Enter で送信</span>
             <Button
               size="sm"
-              disabled={text.trim() === "" || waiting || disabled}
+              disabled={text.trim() === "" || waiting || disabled || hasExited}
               onClick={submitText}
             >
               送信する
