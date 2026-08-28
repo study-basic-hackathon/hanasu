@@ -608,10 +608,12 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
     page.getByText("経験から学んだことを教えてください。"),
   ).toBeVisible();
   await rawButton.click();
+  await expect(page.getByText("えー", { exact: true })).toHaveClass(
+    /text-accent/,
+  );
   await expect(
     page.getByText("%えー% 回答です。", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("回答です。", { exact: true })).toHaveCount(0);
+  ).toHaveCount(0);
   expect(sttRequestCount()).toBe(1);
   expect(chatRequestCount).toBe(1);
 
@@ -621,14 +623,10 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
     .getByRole("button", { name: "録音を停止して送信する" })
     .click();
 
-  await expect(
-    page.getByText("%えー% 回答です。", { exact: true }),
-  ).toHaveCount(2);
+  await expect(page.getByText("えー", { exact: true })).toHaveCount(2);
   await cleanButton.click();
   await expect(page.getByText("回答です。", { exact: true })).toHaveCount(2);
-  await expect(
-    page.getByText("%えー% 回答です。", { exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByText("えー", { exact: true })).toHaveCount(0);
   expect(sttRequestCount()).toBe(2);
   expect(chatRequestCount).toBe(1);
 });
