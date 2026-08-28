@@ -10,7 +10,7 @@
 - **会員登録 API は作らない。** 固定の ID / パスワード1組を使う（[ADR-0011](../ADR/0011-会員登録と利用アカウント.md)）
 - **サインアウト API は作らない。** トークンの破棄はクライアント側で行う
 - **ユーザーは1つだけのため、取得系をユーザーで絞り込まない**（[ADR-0011](../ADR/0011-会員登録と利用アカウント.md)）
-- 本書のパス名・フィールド名の表記は実装時に確定する（→ [6. 未確定事項](#6-未確定事項)）
+- 応募情報 CRUD のパス名・フィールド名は本書4章で確定済み。その他の未確定事項は [7. 未確定事項](#7-未確定事項) に記載する
 
 ## 2. API 一覧
 
@@ -18,7 +18,7 @@
 |---:|---|---|---|
 | 1 | `POST /token` | 認証（ID / パスワード → JWT アクセストークン） | 作る |
 | 2 | `GET /users/me` | 認証中のユーザーを返す | 作る |
-| 3 | 応募情報 CRUD（Create / Read / List / Update / Delete） | 応募情報の登録・参照・更新・削除 | 作る |
+| 3 | `GET /companies` / `POST /companies` / `GET /companies/{company_id}` / `PUT /companies/{company_id}` / `DELETE /companies/{company_id}` | 応募情報の登録・参照・更新・削除 | 作る |
 | 4 | `POST /interviews/start` | 最初の質問を生成する | **任意。** 作らない場合はフロントが固定文字列を持つ |
 | 5 | `POST /interviews/stt` | 文字起こし + フィラー数 + 話速 | 作る |
 | 6 | `POST /interviews/chat` | 次の質問を生成する | 作る |
@@ -58,17 +58,74 @@ username=<ID>&password=<パスワード>
 
 **実態は「応募情報」である。** 企業情報だけでなく**志望動機・経歴（応募者自身の情報）を1レコードで持つ**（[ADR-0009](../ADR/0009-評価方式.md)）。プロフィールという独立した登録は持たない。
 
-| 操作 | インプット | アウトプット |
-|---|---|---|
-| **Create** | 応募情報（企業名・企業情報・志望動機・経歴） | 登録結果（企業ID） |
-| **Read** | 企業ID | 応募情報 |
-| **List** | なし | 登録済みの応募情報の一覧（**企業ID付き**） |
-| **Update** | 企業ID / 更新する応募情報 | 更新結果 |
-| **Delete** | 企業ID | 削除結果 |
+### 4.1 エンドポイント
 
-- **List は必須。** 単体取得（Read）だけでは企業IDを知る手段がなく、モード選択の企業リストと応募企業情報の一覧画面がこの API に依存する
-- **絞り込みは行わず全件を返す**（ユーザーは1つのため）
-- 企業名は必須項目とする。**それ以外の項目の定義は未確定**（→ [6. 未確定事項](#6-未確定事項)）
+| 操作 | メソッド / パス | インプット | 成功時のアウトプット |
+|---|---|---|---|
+| Create | `POST /companies` | リクエストボディに CompanyInput | `201` と Company |
+| List | `GET /companies` | なし | `200` と Company の配列 |
+| Read | `GET /companies/{company_id}` | パスに企業 ID | `200` と Company |
+| Update | `PUT /companies/{company_id}` | パスに企業 ID、リクエストボディに CompanyInput | `200` と Company |
+| Delete | `DELETE /companies/{company_id}` | パスに企業 ID | `204`（レスポンスボディなし） |
+
+- **List は必須。** 単体取得だけでは企業 ID を知る手段がなく、モード選択の企業リストと応募企業情報の一覧画面がこの API に依存する
+- **List は絞り込み・ページネーションを行わず全件を返す**（ユーザーは1つのため）
+- `PUT` は CompanyInput の全項目を受け取る全体更新とする
+
+### 4.2 入出力の項目
+
+CompanyInput と Company が扱う応募情報は次の6項目である。画面と API のラベル対応は [S-07 応募企業情報 登録 / 編集](../frontend/01_design/screens/S-07_応募企業情報_登録編集.md) を参照する。
+
+| API フィールド | 型 | CompanyInput | Company | 最大長 | 制約 |
+|---|---|---|---|---:|---|
+| `company_name` | `string` | **必須** | `string` | 100文字 | 空文字・空白のみは不可。全レコードで一意 |
+| `company_url` | `string \| null` | 任意 | `string \| null` | 2,048文字 | 入力する場合は有効な HTTP(S) URL |
+| `motivation` | `string` | **必須** | `string \| null` | 4,000文字 | 空文字・空白のみは不可。Company の `null` は既存データとの互換性のため許容 |
+| `resume` | `string \| null` | 任意 | `string \| null` | 10,000文字 | 経歴・実績 |
+| `note` | `string \| null` | 任意 | `string \| null` | 2,000文字 | 備考 |
+| `job_summary` | `string \| null` | 任意 | `string \| null` | 4,000文字 | 募集要項の要約 |
+
+- 最大長はバイト数ではなく、**入力の前後の空白を除いた文字数**で判定する
+- `company_url` / `resume` / `note` / `job_summary` は、CompanyInput でキー省略または `null` を許容する。空文字・空白のみは `null` に正規化する
+- Company は6項目のキーを常に含み、任意項目の未入力は `null` で返す
+- `id` と `created_at` は Company のレスポンス専用メタデータであり、CompanyInput には含めない。S-06 / S-07 の表示項目にも数えない
+
+### 4.3 入出力例
+
+```json
+// POST /companies または PUT /companies/{company_id}
+{
+  "company_name": "株式会社サンプル",
+  "company_url": "https://example.com/jobs/123",
+  "motivation": "顧客課題の解決に技術で貢献したいためです。",
+  "resume": "Web アプリケーション開発に3年従事しました。",
+  "note": null,
+  "job_summary": "自社サービスのバックエンド開発を担当する募集です。"
+}
+```
+
+```json
+// Company
+{
+  "id": 12,
+  "company_name": "株式会社サンプル",
+  "company_url": "https://example.com/jobs/123",
+  "motivation": "顧客課題の解決に技術で貢献したいためです。",
+  "resume": "Web アプリケーション開発に3年従事しました。",
+  "note": null,
+  "job_summary": "自社サービスのバックエンド開発を担当する募集です。",
+  "created_at": "2026-08-28T10:00:00Z"
+}
+```
+
+### 4.4 エラー
+
+| 状況 | HTTP ステータス |
+|---|---:|
+| 認証できない | `401` |
+| Read / Update / Delete で企業 ID が存在しない | `404` |
+| Create / Update で企業名が重複する | `409` |
+| CompanyInput の必須・型・形式・最大長の制約に違反する | `422` |
 
 ## 5. 面接と評価
 
@@ -248,14 +305,15 @@ audio: <録音した音声 (webm/opus)>
 | テーブル | カラム | 備考 |
 |---|---|---|
 | `users` | `id` (PK) / `username` / `password_hash` | 固定アカウント1つ |
-| `applications`（応募情報） | `id` (PK) / `company_name` / `company_info` / `motivation` / `resume` | 企業情報 + 志望動機 + 経歴を1レコードで持つ |
+| `companies`（応募情報） | `id` (PK) / `company_name` / `company_url` / `motivation` / `resume` / `note` / `job_summary` / `created_at` | 企業情報 + 志望動機 + 経歴を1レコードで持つ。`company_name` は一意 |
 | `evaluations`（評価結果） | `evaluation_id` (PK) / `company_id` (FK + INDEX) / `status` / `total_score` / `scores` (JSON) / `advice` (JSON) / `created_at` | `status` は `processing` / `completed` / `failed` |
 
 - **`evaluations` の PK は `evaluation_id` 単体。** `GET /evaluations/{evaluation_id}` で引く以上、これ単体で一意に特定できる必要がある
 - **`evaluations.company_id` は NULL を許す**（チュートリアルの評価は応募情報を持たないため）
 - **`session_id` は持たない。** 1セッション = 1評価であり `evaluation_id` と 1:1 になる
 - **`user_id` は持たない。** ユーザーを1つしか用意しないため
-- **作成日時・更新日時は必須としない。** 画面が使う日時は `evaluations.created_at`（練習の実施日時）だけである。**`users` / `applications` に持たせるかどうかは実装に委ねる**（[画面と API の対応](../frontend/01_design/screen_api_map.md) 6章）
+- `companies.created_at` は API のレスポンス専用メタデータとして保存する。S-06 / S-07 には表示しない
+- `companies.updated_at` は持たない。画面が応募情報の更新日時を使わないためである（[画面と API の対応](../frontend/01_design/screen_api_map.md) 6章）
 
 ## 7. 未確定事項
 
@@ -263,15 +321,14 @@ audio: <録音した音声 (webm/opus)>
 
 | # | 未確定事項 | 決めるべき場所 |
 |---:|---|---|
-| 1 | **パス名と ID の命名。** `/interviews/*` に揃えるか、`company_id` を `application_id` に改める（既存 API は `/token` `/users/me` とプレフィックスなし） | 各 API の実装時 |
-| 2 | **応募情報の項目定義**（企業名以外の入力項目と、CRUD の入出力の中身） | [#17](https://github.com/study-basic-hackathon/hanasu/issues/17) |
-| 3 | **質問強度のフィールド名と値の表記**（楽々 / 標準 / 厳しめ をどう表すか） | 会話 API の実装時 |
-| 4 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**クライアント側に置かれる** | [ADR-0009](../ADR/0009-評価方式.md) のフォローアップ（実装時） |
-| 5 | **「間の長さ」を評価に加える場合の `scores` のキー**と、項目別スコア表示との対応 | 実装時 |
-| 6 | **フィラーの定義範囲。** `keepFillerToken=1` が期待どおり効くか、「なんか」「まあ」等を含めるか | [#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
-| 7 | **非同期処理の実装方式**（`BackgroundTasks` / ワーカー分離）とポーリング間隔 | 評価 API の実装時 |
-| 8 | **TTS のサービス選定**（Amazon Polly / 外部 API など） | TTS を作ると決めた時点 |
-| 9 | **画面のために加えることが決まった項目**（評価結果の企業名・質問の強度・ターン数、評価履歴一覧の企業と項目別スコア）。**新しいエンドポイントは増えない** | [画面と API の対応](../frontend/01_design/screen_api_map.md) 6章に一覧がある。**本書への反映は各 API の実装時** |
+| 1 | **面接・評価 API のパス名と ID の命名。** `/interviews/*` に揃えるか、`company_id` を `application_id` に改めるか | 各 API の実装時 |
+| 2 | **質問強度のフィールド名と値の表記**（楽々 / 標準 / 厳しめ をどう表すか） | 会話 API の実装時 |
+| 3 | **定量スコアの点数化基準**（「284文字/分は何点か」）。**クライアント側に置かれる** | [ADR-0009](../ADR/0009-評価方式.md) のフォローアップ（実装時） |
+| 4 | **「間の長さ」を評価に加える場合の `scores` のキー**と、項目別スコア表示との対応 | 実装時 |
+| 5 | **フィラーの定義範囲。** `keepFillerToken=1` が期待どおり効くか、「なんか」「まあ」等を含めるか | [#36](https://github.com/study-basic-hackathon/hanasu/issues/36) |
+| 6 | **非同期処理の実装方式**（`BackgroundTasks` / ワーカー分離）とポーリング間隔 | 評価 API の実装時 |
+| 7 | **TTS のサービス選定**（Amazon Polly / 外部 API など） | TTS を作ると決めた時点 |
+| 8 | **画面のために加えることが決まった項目**（評価結果の企業名・質問の強度・ターン数、評価履歴一覧の企業と項目別スコア）。**新しいエンドポイントは増えない** | [画面と API の対応](../frontend/01_design/screen_api_map.md) 6章に一覧がある。**本書への反映は各 API の実装時** |
 
 ## 8. 参考
 
@@ -282,4 +339,6 @@ audio: <録音した音声 (webm/opus)>
 - [ADR-0010 音声認識とLLMの基盤選定](../ADR/0010-音声認識とLLMの基盤選定.md) — STT は AmiVoice、LLM は Bedrock
 - [ADR-0011 会員登録と利用アカウント](../ADR/0011-会員登録と利用アカウント.md) — 会員登録を作らず固定の ID / パスワード1組を使う
 - [画面と API の対応](../frontend/01_design/screen_api_map.md) — どの画面がどの API を呼ぶか
+- [Issue #17](https://github.com/study-basic-hackathon/hanasu/issues/17) — 応募企業情報の項目定義
+- [検討記録: 応募企業情報の項目定義](../00_検討/20260823_応募企業情報項目定義.md) — 現行の画面・API・実装の照合と決定経緯
 - [検討記録: 会話セッションのAPI構成](../00_検討/20260816_会話セッションAPI構成.md) — API 構成に至る経緯と案の比較
