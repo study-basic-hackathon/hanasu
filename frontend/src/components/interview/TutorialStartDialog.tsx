@@ -113,10 +113,11 @@ export function TutorialStartDialog({
       }
       confirmLabel="チュートリアルを始める"
       confirmVariant="primary"
-      onConfirm={() => {
-        setChosen(null);
-        router.push(`/tutorial/${answerMethod}?readAloud=${readAloudMode}`);
-      }}
+      // 遷移が終わるまでダイアログは開いたまま。ここで選択を捨てると
+      // 初期値へ戻ったように見えるため、確定時は触らない
+      onConfirm={() =>
+        router.push(`/tutorial/${answerMethod}?readAloud=${readAloudMode}`)
+      }
       onCancel={() => {
         setChosen(null);
         onCancel();
