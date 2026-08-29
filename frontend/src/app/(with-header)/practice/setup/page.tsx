@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { TutorialStartDialog } from "@/components/interview/TutorialStartDialog";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -95,6 +96,7 @@ function PracticeSetupContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmingStart, setConfirmingStart] = useState(false);
+  const [startingTutorial, setStartingTutorial] = useState(false);
 
   useEffect(() => {
     if (mode === null) router.replace("/");
@@ -170,7 +172,6 @@ function PracticeSetupContent() {
     const params = new URLSearchParams({
       companyId: String(companyId),
       strength,
-      answerMethod,
       readAloud: readAloudMode,
       maxTurns: String(maxTurns),
     });
@@ -178,7 +179,8 @@ function PracticeSetupContent() {
       params.set("customQuestionStrength", customQuestionStrength.trim());
     }
     setConfirmingStart(false);
-    router.push(`/interview?${params.toString()}`);
+    // 回答方式は画面の中で切り替えないため、方式ごとのページへ分けて進む
+    router.push(`/interview/${answerMethod}?${params.toString()}`);
   }
 
   function adjustMaxTurns(amount: -1 | 1) {
@@ -472,9 +474,13 @@ function PracticeSetupContent() {
 
       <div className="flex items-center justify-between pt-1">
         {/* 登録件数にかかわらず常に出す（S-05 4章） */}
-        <Link href="/tutorial" className="text-label text-accent hover:underline">
+        <button
+          type="button"
+          onClick={() => setStartingTutorial(true)}
+          className="text-label text-accent hover:underline"
+        >
           先にチュートリアルを試す
-        </Link>
+        </button>
         <div className="flex items-center gap-3">
           {/* 練習モード固定の画面では出さない（S-05 5章） */}
           {!isPracticeMode && (
@@ -532,6 +538,14 @@ function PracticeSetupContent() {
         confirmVariant="primary"
         onConfirm={startInterview}
         onCancel={() => setConfirmingStart(false)}
+      />
+
+      {/* この画面での選択を初期値にして、チュートリアルの条件を1回確認する */}
+      <TutorialStartDialog
+        open={startingTutorial}
+        defaultAnswerMethod={answerMethod}
+        defaultReadAloudMode={readAloudMode}
+        onCancel={() => setStartingTutorial(false)}
       />
     </PageContainer>
   );

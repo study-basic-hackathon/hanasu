@@ -1,11 +1,12 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { InterviewInputProps } from "@/components/interview/InterviewInput";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ApiError } from "@/lib/api-client";
-import { cn } from "@/lib/cn";
-import type { AnswerMethod } from "@/lib/domain";
 import { formatElapsed } from "@/lib/format";
 import {
   RECORDING_MAX_SECONDS,
@@ -14,34 +15,12 @@ import {
 } from "@/lib/interview";
 import { transcribeAudio } from "@/lib/interview-api";
 
-export type AnswerDetail = {
-  rawContent: string;
-  audioSeconds: number;
-  audioDurationMs: number;
-  characterCount: number;
-  fillerCount: number;
-  fillerCountPerMin: number;
-  charsPerMin: number;
-};
-
-type AnswerPanelProps = {
-  answerMethod: AnswerMethod;
-  onChangeAnswerMethod: (method: AnswerMethod) => void;
-  onSubmit: (content: string, detail?: AnswerDetail) => void;
-  waiting?: boolean;
-  disabled?: boolean;
-  /** 面接の終了時に録音・文字起こし・入力中の一時データを破棄する。 */
-  exitSignal?: AbortSignal;
-};
-
-const METHOD_LABEL: Record<AnswerMethod, string> = {
-  voice: "音声で回答",
-  text: "文字入力で回答",
-};
-
 type RecordingState = "idle" | "requesting" | "recording" | "transcribing";
 const WAVE_BARS = 30;
 const AUDIO_LEVEL_THRESHOLD = 8;
+
+const MIC_UNAVAILABLE_MESSAGE =
+  "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。";
 
 function initialLevels(): number[] {
   return Array.from({ length: WAVE_BARS }, () => 4);
@@ -70,20 +49,28 @@ function transcriptionFailureMessage(error: unknown): string {
   return "聞き取れませんでした。もう一度お話しください。";
 }
 
-export function AnswerPanel({
-  answerMethod,
-  onChangeAnswerMethod,
+/** 音声入力モードの回答欄（S-08 6章）。 */
+export function VoiceAnswerPanel({
   onSubmit,
-  waiting = false,
-  disabled = false,
+  waiting,
+  disabled,
   exitSignal,
-}: AnswerPanelProps) {
-  const [text, setText] = useState("");
+}: InterviewInputProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // マイクが使えないときの移り先。設定はクエリのまま引き継ぐ
+  const query = searchParams.toString();
+  const textModeHref =
+    pathname.replace(/\/voice$/, "/text") + (query === "" ? "" : `?${query}`);
   const [recording, setRecording] = useState<RecordingState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [silence, setSilence] = useState(0);
   const [levels, setLevels] = useState<number[]>(initialLevels);
   const [notice, setNotice] = useState<string | null>(null);
+  // マイクが使えないと分かったら、録音の操作を押せなくして移行の導線だけ残す
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [confirmingTextMode, setConfirmingTextMode] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -112,7 +99,6 @@ export function AnswerPanel({
     recorderRef.current = null;
     chunksRef.current = [];
     releaseAudio();
-    setText("");
     setRecording("idle");
     setElapsed(0);
     setSilence(0);
@@ -139,13 +125,6 @@ export function AnswerPanel({
       releaseAudio();
     };
   }, [releaseAudio]);
-
-  function submitText() {
-    const content = text.trim();
-    if (content === "") return;
-    setText("");
-    onSubmit(content);
-  }
 
   const stopRecording = useCallback(() => {
     const recorder = recorderRef.current;
@@ -203,10 +182,8 @@ export function AnswerPanel({
     if (disposedRef.current || exitSignal?.aborted) return;
     setNotice(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setNotice(
-        "マイクを使えません。ブラウザの設定で許可するか、文字入力で回答してください。",
-      );
-      onChangeAnswerMethod("text");
+      setNotice(MIC_UNAVAILABLE_MESSAGE);
+      setMicBlocked(true);
       return;
     }
 
@@ -306,10 +283,8 @@ export function AnswerPanel({
     } catch {
       releaseAudio();
       setRecording("idle");
-      setNotice(
-        "マイクを使えません。ブラウザの設定で許可するか、文字入力で回答してください。",
-      );
-      onChangeAnswerMethod("text");
+      setNotice(MIC_UNAVAILABLE_MESSAGE);
+      setMicBlocked(true);
     }
   }
 
@@ -320,136 +295,107 @@ export function AnswerPanel({
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex overflow-hidden rounded-control border border-line-strong">
-          {(["voice", "text"] as AnswerMethod[]).map((method) => (
-            <button
-              key={method}
-              type="button"
-              aria-pressed={answerMethod === method}
-              disabled={isBusy || disabled || hasExited}
-              onClick={() => {
-                setNotice(null);
-                onChangeAnswerMethod(method);
-              }}
-              className={cn(
-                "h-8 px-[18px] text-label disabled:cursor-not-allowed",
-                answerMethod === method
-                  ? "bg-accent font-medium text-white"
-                  : "text-ink-label hover:bg-canvas",
-              )}
-            >
-              {METHOD_LABEL[method]}
-            </button>
-          ))}
+      {isRecording && (
+        <div className="flex items-center justify-end gap-2 text-label text-danger">
+          <span className="block size-2 rounded-full bg-danger" />
+          録音中 {formatElapsed(elapsed)}
         </div>
-        {isRecording && (
-          <div className="flex items-center gap-2 text-label text-danger">
-            <span className="block size-2 rounded-full bg-danger" />
-            録音中 {formatElapsed(elapsed)}
-          </div>
+      )}
+
+      <div className="flex items-center gap-6 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
+        {isRecording ? (
+          <>
+            <button
+              type="button"
+              aria-label="録音を停止して送信する"
+              onClick={stopRecording}
+              className="grid size-16 flex-none place-items-center rounded-full bg-danger shadow-[0_0_0_6px_#f7e6e5]"
+            >
+              <span className="block size-5 rounded-[3px] bg-white" />
+            </button>
+            <div className="flex flex-1 flex-col gap-2.5">
+              <div className="flex h-[46px] items-end gap-[3px]">
+                {levels.map((level, index) => (
+                  <span
+                    key={index}
+                    className="block w-1 rounded-[2px] bg-accent"
+                    style={{ height: `${level}px` }}
+                  />
+                ))}
+              </div>
+              {silence > 0 && (
+                <div className="flex items-center gap-2.5 text-note text-ink-sub">
+                  <span className="rounded-chip border border-[#f0e0b8] bg-[#fdf6e7] px-2 py-1 font-medium text-[#8a6a12]">
+                    無音 {silence.toFixed(1)} 秒
+                  </span>
+                  <span>
+                    あと {remainingSilence.toFixed(1)} 秒 静かなままだと自動で停止します
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex w-[150px] flex-none flex-col gap-2">
+              <Button size="xs" className="h-[38px] w-full" onClick={stopRecording}>
+                停止して送信
+              </Button>
+              <Button
+                variant="secondary"
+                size="xs"
+                className="h-8 w-full text-label"
+                onClick={cancelRecording}
+              >
+                取り消す
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              aria-label="回答を録音する"
+              disabled={isBusy || waiting || disabled || hasExited || micBlocked}
+              onClick={startRecording}
+              className="grid size-16 flex-none place-items-center rounded-full bg-accent shadow-[0_0_0_6px_#e4efee] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="block size-5 rounded-full bg-white" />
+            </button>
+            <span className="text-body-sm text-ink-sub">
+              {recording === "requesting"
+                ? "マイクの使用許可を確認しています"
+                : recording === "transcribing"
+                  ? "文字起こししています"
+                  : micBlocked
+                    ? "マイクを使えません"
+                    : "押して回答を録音します"}
+            </span>
+          </>
         )}
       </div>
 
-      {answerMethod === "voice" ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-6 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
-            {isRecording ? (
-              <>
-                <button
-                  type="button"
-                  aria-label="録音を停止して送信する"
-                  onClick={stopRecording}
-                  className="grid size-16 flex-none place-items-center rounded-full bg-danger shadow-[0_0_0_6px_#f7e6e5]"
-                >
-                  <span className="block size-5 rounded-[3px] bg-white" />
-                </button>
-                <div className="flex flex-1 flex-col gap-2.5">
-                  <div className="flex h-[46px] items-end gap-[3px]">
-                    {levels.map((level, index) => (
-                      <span
-                        key={index}
-                        className="block w-1 rounded-[2px] bg-accent"
-                        style={{ height: `${level}px` }}
-                      />
-                    ))}
-                  </div>
-                  {silence > 0 && (
-                    <div className="flex items-center gap-2.5 text-note text-ink-sub">
-                      <span className="rounded-chip border border-[#f0e0b8] bg-[#fdf6e7] px-2 py-1 font-medium text-[#8a6a12]">
-                        無音 {silence.toFixed(1)} 秒
-                      </span>
-                      <span>
-                        あと {remainingSilence.toFixed(1)} 秒 静かなままだと自動で停止します
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex w-[150px] flex-none flex-col gap-2">
-                  <Button size="xs" className="h-[38px] w-full" onClick={stopRecording}>
-                    停止して送信
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    className="h-8 w-full text-label"
-                    onClick={cancelRecording}
-                  >
-                    取り消す
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  aria-label="回答を録音する"
-                  disabled={isBusy || waiting || disabled || hasExited}
-                  onClick={startRecording}
-                  className="grid size-16 flex-none place-items-center rounded-full bg-accent shadow-[0_0_0_6px_#e4efee] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="block size-5 rounded-full bg-white" />
-                </button>
-                <span className="text-body-sm text-ink-sub">
-                  {recording === "requesting"
-                    ? "マイクの使用許可を確認しています"
-                    : recording === "transcribing"
-                      ? "文字起こししています"
-                      : "押して回答を録音します"}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
-          <textarea
-            rows={3}
-            value={text}
-            disabled={waiting || disabled || hasExited}
-            placeholder="回答を入力してください"
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                submitText();
-              }
-            }}
-            className="w-full resize-y rounded-control border border-line-strong bg-surface px-3 py-2.5 text-body leading-[1.8] placeholder:text-ink-muted focus:outline-2 focus:outline-offset-[-1px] focus:outline-accent"
-          />
-          <div className="flex items-center justify-end gap-3">
-            <span className="text-note text-ink-muted">Ctrl + Enter で送信</span>
-            <Button
-              size="sm"
-              disabled={text.trim() === "" || waiting || disabled || hasExited}
-              onClick={submitText}
-            >
-              送信する
-            </Button>
-          </div>
-        </div>
-      )}
       {notice && <p role="alert" className="text-note text-danger">{notice}</p>}
+      {/* 画面内では方式を切り替えない。始め直すことでだけ文字入力へ移る */}
+      {micBlocked && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="self-start"
+          onClick={() => setConfirmingTextMode(true)}
+        >
+          文字入力モードで始め直す
+        </Button>
+      )}
+
+      <ConfirmDialog
+        open={confirmingTextMode}
+        message="文字入力モードで始め直します。ここまでの会話は失われ、評価は行われません。"
+        confirmLabel="始め直す"
+        confirmVariant="primary"
+        onConfirm={() => {
+          setConfirmingTextMode(false);
+          router.replace(textModeHref);
+        }}
+        onCancel={() => setConfirmingTextMode(false)}
+      />
     </div>
   );
 }

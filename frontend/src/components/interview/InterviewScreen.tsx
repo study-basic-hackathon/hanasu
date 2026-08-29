@@ -4,14 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  AnswerPanel,
-  type AnswerDetail,
-} from "@/components/interview/AnswerPanel";
-import {
   ChatMessage,
   type SpeechStatus,
   ThinkingMessage,
 } from "@/components/interview/ChatMessage";
+import type {
+  AnswerDetail,
+  InterviewInputPanel,
+} from "@/components/interview/InterviewInput";
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -81,16 +81,24 @@ function customQuestionStrengthOf(value: string | null): string | null {
     : null;
 }
 
-function answerMethodOf(value: string | null): AnswerMethod | null {
-  return value === "voice" || value === "text" ? value : null;
-}
-
 function nowClock(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-export function InterviewScreen({ mode }: { mode: InterviewMode }) {
+type InterviewScreenProps = {
+  mode: InterviewMode;
+  /** 回答方式はページで決まる。画面の中では切り替えない */
+  answerMethod: AnswerMethod;
+  /** 回答方式ごとの入力エリア */
+  InputPanel: InterviewInputPanel;
+};
+
+export function InterviewScreen({
+  mode,
+  answerMethod,
+  InputPanel,
+}: InterviewScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isTutorial = mode === "tutorial";
@@ -117,8 +125,6 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     questionStrength === "custom"
       ? (configuredCustomQuestionStrength ?? undefined)
       : undefined;
-  const configuredAnswerMethod =
-    answerMethodOf(searchParams.get("answerMethod")) ?? "voice";
   const configuredReadAloudMode = resolveReadAloudMode(
     searchParams.get("readAloud"),
   );
@@ -127,9 +133,6 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     isTutorial
       ? [{ role: "assistant", content: TUTORIAL_QUESTION }]
       : [{ role: "assistant", content: FIRST_QUESTION }],
-  );
-  const [answerMethod, setAnswerMethod] = useState<AnswerMethod>(
-    configuredAnswerMethod,
   );
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     configuredReadAloudMode,
@@ -258,20 +261,21 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     };
   }, [releaseSpeech]);
 
+  // 最初の質問だけは会話 API を経由しないため、ここで読み上げを始める
   useEffect(() => {
     if (
-      isTutorial ||
       configuredReadAloudMode !== "enabled" ||
       initialAutoSpeechStartedRef.current
     ) {
       return;
     }
 
+    const firstQuestion = isTutorial ? TUTORIAL_QUESTION : FIRST_QUESTION;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled || initialAutoSpeechStartedRef.current) return;
       initialAutoSpeechStartedRef.current = true;
-      void startSpeech(0, FIRST_QUESTION);
+      void startSpeech(0, firstQuestion);
     });
 
     return () => {
@@ -580,36 +584,34 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           <Chip tone="muted" className="px-2.5 py-[5px] text-label">
             回答方式：{ANSWER_METHOD_LABEL[answerMethod]}
           </Chip>
-          {!isTutorial && (
-            <div className="flex items-center gap-2 text-label text-ink-sub">
-              <span>読み上げ：</span>
-              <div className="flex overflow-hidden rounded-control border border-line-strong">
-                {READ_ALOUD_MODES.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
-                    aria-pressed={readAloudMode === value}
-                    onClick={() => {
-                      if (value === readAloudMode) return;
-                      setReadAloudMode(value);
-                      if (value === "disabled") {
-                        stopSpeech();
-                      }
-                    }}
-                    className={cn(
-                      "h-7 px-2.5 text-note",
-                      readAloudMode === value
-                        ? "bg-accent font-medium text-white"
-                        : "bg-surface text-ink-label hover:bg-canvas",
-                    )}
-                  >
-                    {READ_ALOUD_MODE_LABEL[value]}
-                  </button>
-                ))}
-              </div>
+          <div className="flex items-center gap-2 text-label text-ink-sub">
+            <span>読み上げ：</span>
+            <div className="flex overflow-hidden rounded-control border border-line-strong">
+              {READ_ALOUD_MODES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
+                  aria-pressed={readAloudMode === value}
+                  onClick={() => {
+                    if (value === readAloudMode) return;
+                    setReadAloudMode(value);
+                    if (value === "disabled") {
+                      stopSpeech();
+                    }
+                  }}
+                  className={cn(
+                    "h-7 px-2.5 text-note",
+                    readAloudMode === value
+                      ? "bg-accent font-medium text-white"
+                      : "bg-surface text-ink-label hover:bg-canvas",
+                  )}
+                >
+                  {READ_ALOUD_MODE_LABEL[value]}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
           {!isTutorial && (
             <div className="flex items-center gap-2 text-label text-ink-sub">
               <span>会話ログ：</span>
@@ -708,9 +710,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
               </Button>
             </div>
           )}
-          <AnswerPanel
-            answerMethod={answerMethod}
-            onChangeAnswerMethod={setAnswerMethod}
+          <InputPanel
             onSubmit={handleSubmit}
             waiting={waiting || evaluating}
             disabled={hasReachedTurnLimit}

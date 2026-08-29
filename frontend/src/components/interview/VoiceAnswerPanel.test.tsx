@@ -8,14 +8,20 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AnswerPanel,
-  type AnswerDetail,
-} from "@/components/interview/AnswerPanel";
+import type { AnswerDetail } from "@/components/interview/InterviewInput";
+import { VoiceAnswerPanel } from "@/components/interview/VoiceAnswerPanel";
 import { ApiError } from "@/lib/api-client";
 
 const mocks = vi.hoisted(() => ({
+  replace: vi.fn(),
+  search: "companyId=7&strength=standard&readAloud=enabled&maxTurns=10",
   transcribeAudio: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/interview/voice",
+  useRouter: () => ({ replace: mocks.replace }),
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
 vi.mock("@/lib/interview-api", () => ({
@@ -90,7 +96,7 @@ const transcription = {
   chars_per_min: 150,
 };
 
-describe("AnswerPanel の音声回答", () => {
+describe("VoiceAnswerPanel", () => {
   const trackStop = vi.fn();
   const getUserMedia = vi.fn();
   let now = 0;
@@ -119,22 +125,19 @@ describe("AnswerPanel の音声回答", () => {
 
   function renderPanel(options: {
     onSubmit?: (content: string, detail?: AnswerDetail) => void;
-    onChangeAnswerMethod?: (method: "voice" | "text") => void;
     disabled?: boolean;
     exitSignal?: AbortSignal;
   } = {}) {
     const onSubmit = options.onSubmit ?? vi.fn();
-    const onChangeAnswerMethod = options.onChangeAnswerMethod ?? vi.fn();
     render(
-      <AnswerPanel
-        answerMethod="voice"
-        onChangeAnswerMethod={onChangeAnswerMethod}
+      <VoiceAnswerPanel
         onSubmit={onSubmit}
-        disabled={options.disabled}
-        exitSignal={options.exitSignal}
+        waiting={false}
+        disabled={options.disabled ?? false}
+        exitSignal={options.exitSignal ?? new AbortController().signal}
       />,
     );
-    return { onSubmit, onChangeAnswerMethod };
+    return { onSubmit };
   }
 
   async function startAndStopRecording() {
@@ -250,35 +253,54 @@ describe("AnswerPanel の音声回答", () => {
     ).toBeEnabled();
   });
 
-  it("マイクを拒否されたら会話を追加せず文字入力へ切り替える", async () => {
+  it("マイクを拒否されたら録音を押せなくし、確認のうえ同じ設定の文字入力ページへ移る", async () => {
     getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
     const onSubmit = vi.fn();
-    const onChangeAnswerMethod = vi.fn();
-    renderPanel({ onSubmit, onChangeAnswerMethod });
+    renderPanel({ onSubmit });
 
     fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "マイクを使えません。ブラウザの設定で許可するか、文字入力で回答してください。",
+      "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。",
     );
-    expect(onChangeAnswerMethod).toHaveBeenCalledWith("text");
-    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it("無効時は回答方式の切替と録音開始を受け付けない", () => {
-    const { onChangeAnswerMethod } = renderPanel({ disabled: true });
-
-    expect(screen.getByRole("button", { name: "音声で回答" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "文字入力で回答" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "回答を録音する" }),
     ).toBeDisabled();
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "文字入力で回答" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "文字入力モードで始め直す" }),
+    );
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "文字入力モードで始め直します。ここまでの会話は失われ、評価は行われません。",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "文字入力モードで始め直す" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "始め直す" }));
+
+    expect(mocks.replace).toHaveBeenCalledOnce();
+    expect(mocks.replace).toHaveBeenCalledWith(
+      "/interview/text?companyId=7&strength=standard&readAloud=enabled&maxTurns=10",
+    );
+  });
+
+  it("無効時は録音開始を受け付けず、方式の切り替えも持たない", () => {
+    renderPanel({ disabled: true });
+
+    expect(
+      screen.getByRole("button", { name: "回答を録音する" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "文字入力で回答" }),
+    ).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
 
-    expect(onChangeAnswerMethod).not.toHaveBeenCalled();
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 

@@ -1,15 +1,12 @@
 import { Suspense } from "react";
 
-import { InterviewScreen } from "@/components/interview/InterviewScreen";
+import { AnswerMethodRedirect } from "@/components/interview/AnswerMethodRedirect";
 
-/**
- * S-03 チュートリアル。
- * S-08 の画面を流用し、質問を1問に固定して応募企業情報を使わない（画面一覧 3章）。
- */
+/** 回答方式を分ける前の URL。`/tutorial/voice`・`/tutorial/text` へ送る */
 export default function TutorialPage() {
   return (
     <Suspense fallback={<p className="p-8 text-body-sm text-ink-sub">チュートリアルを準備しています。</p>}>
-      <InterviewScreen mode="tutorial" />
+      <AnswerMethodRedirect mode="tutorial" />
     </Suspense>
   );
 }

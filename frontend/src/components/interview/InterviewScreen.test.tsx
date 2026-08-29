@@ -9,8 +9,15 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InterviewScreen } from "@/components/interview/InterviewScreen";
+import { TextAnswerPanel } from "@/components/interview/TextAnswerPanel";
 import type { ChatTurn } from "@/lib/domain";
-import { FIRST_QUESTION } from "@/lib/interview";
+import { FIRST_QUESTION, TUTORIAL_QUESTION } from "@/lib/interview";
+
+/** 回答方式はページで決まる。共通シェルの検証は文字入力の入力パネルで行う */
+const screenProps = {
+  answerMethod: "text",
+  InputPanel: TextAnswerPanel,
+} as const;
 
 const mocks = vi.hoisted(() => ({
   audioPlay: vi.fn(),
@@ -82,7 +89,7 @@ describe("InterviewScreen の読み上げモード", () => {
     objectUrlIndex = 0;
     FakeAudio.instances = [];
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=10";
+      "companyId=7&strength=standard&readAloud=disabled&maxTurns=10";
     mocks.getCompany.mockResolvedValue(company);
     mocks.createEvaluation.mockResolvedValue(88);
     mocks.requestNextQuestion.mockResolvedValue("次の質問です。");
@@ -122,7 +129,7 @@ describe("InterviewScreen の読み上げモード", () => {
   }
 
   it("本番モードの文字起こし表示はフィラーありを初期値とし、会話APIを呼ばずに切り替える", () => {
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     const cleanButton = screen.getByRole("button", {
       name: "文字起こし表示: フィラーなし",
@@ -142,10 +149,10 @@ describe("InterviewScreen の読み上げモード", () => {
     expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
   });
 
-  it("開始前の選択を表示直後に反映し、会話と回答方式を保ったまま切り替える", async () => {
+  it("開始前の選択を表示直後に反映し、会話を保ったまま読み上げを切り替える", async () => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=enabled&maxTurns=10";
-    render(<InterviewScreen mode="interview" />);
+      "companyId=7&strength=standard&readAloud=enabled&maxTurns=10";
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     expect(screen.getByRole("button", { name: "ホーム" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "中断" })).toBeDisabled();
@@ -178,8 +185,8 @@ describe("InterviewScreen の読み上げモード", () => {
     const instruction = "回答の根拠を数値で確認してください";
     mocks.search =
       `companyId=7&strength=custom&customQuestionStrength=${encodeURIComponent(instruction)}` +
-      "&answerMethod=text&readAloud=disabled&maxTurns=3";
-    render(<InterviewScreen mode="interview" />);
+      "&readAloud=disabled&maxTurns=3";
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     expect(screen.getByText("質問の強度：カスタム")).toBeVisible();
 
@@ -205,7 +212,7 @@ describe("InterviewScreen の読み上げモード", () => {
 
   it("最初の固定質問をログへ表示してから文章全体を1回だけ自動再生する", async () => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=enabled&maxTurns=10";
+      "companyId=7&strength=standard&readAloud=enabled&maxTurns=10";
     mocks.synthesizeSpeech.mockImplementation(async (text: string) => {
       expect(screen.getByText(text)).toBeInTheDocument();
       return new Blob(["mp3"], { type: "audio/mpeg" });
@@ -213,7 +220,7 @@ describe("InterviewScreen の読み上げモード", () => {
 
     render(
       <StrictMode>
-        <InterviewScreen mode="interview" />
+        <InterviewScreen mode="interview" {...screenProps} />
       </StrictMode>,
     );
 
@@ -233,8 +240,8 @@ describe("InterviewScreen の読み上げモード", () => {
     "欠落・不正な読み上げURL値 %s は読み上げるへフォールバックする",
     async (readAloudQuery) => {
     mocks.search =
-      `companyId=7&strength=standard&answerMethod=voice&${readAloudQuery}&maxTurns=10`;
-    render(<InterviewScreen mode="interview" />);
+      `companyId=7&strength=standard&${readAloudQuery}&maxTurns=10`;
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     await waitFor(() => expect(mocks.getCompany).toHaveBeenCalled());
     expect(
@@ -248,7 +255,7 @@ describe("InterviewScreen の読み上げモード", () => {
       expect(screen.getByText(text)).toBeInTheDocument();
       return new Blob(["mp3"], { type: "audio/mpeg" });
     });
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
 
     submitAnswer("1つ目の回答です。");
@@ -266,8 +273,8 @@ describe("InterviewScreen の読み上げモード", () => {
 
   it("読み上げないモードではTTSを自動送信せず会話と回答操作を続ける", async () => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=10";
-    render(<InterviewScreen mode="interview" />);
+      "companyId=7&strength=standard&readAloud=disabled&maxTurns=10";
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     submitAnswer("読み上げない回答です。");
 
@@ -282,7 +289,7 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("モードOFFで再生を停止してObject URLを解放する", async () => {
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
     await screen.findByRole("button", { name: "停止する" });
@@ -307,7 +314,7 @@ describe("InterviewScreen の読み上げモード", () => {
         return new Promise<Blob>(() => undefined);
       },
     );
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
     await screen.findByRole("button", { name: "音声を準備しています" });
@@ -325,7 +332,7 @@ describe("InterviewScreen の読み上げモード", () => {
     mocks.requestNextQuestion
       .mockResolvedValueOnce("1つ目の質問です。")
       .mockResolvedValueOnce("2つ目の質問です。");
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
 
     submitAnswer("1つ目の回答です。");
@@ -348,7 +355,7 @@ describe("InterviewScreen の読み上げモード", () => {
     mocks.synthesizeSpeech
       .mockRejectedValueOnce(new Error("tts failed"))
       .mockResolvedValueOnce(new Blob(["mp3"], { type: "audio/mpeg" }));
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
 
@@ -371,7 +378,7 @@ describe("InterviewScreen の読み上げモード", () => {
     mocks.audioPlay
       .mockRejectedValueOnce(new DOMException("blocked", "NotAllowedError"))
       .mockResolvedValueOnce(undefined);
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
 
@@ -389,7 +396,7 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("音声要素の再生失敗を表示し、発言単位で再試行できる", async () => {
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
     await screen.findByRole("button", { name: "停止する" });
@@ -412,7 +419,7 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("画面離脱時に再生を停止してObject URLを解放する", async () => {
-    const view = render(<InterviewScreen mode="interview" />);
+    const view = render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("回答です。");
     await screen.findByRole("button", { name: "停止する" });
@@ -425,7 +432,7 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("中断確認を取り消すと会話・通信・再生を維持する", async () => {
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("続ける回答です。");
     await screen.findByRole("button", { name: "停止する" });
@@ -446,7 +453,7 @@ describe("InterviewScreen の読み上げモード", () => {
 
   it("中断時に再生と一時会話を破棄して評価を一度だけ開始する", async () => {
     mocks.createEvaluation.mockImplementation(() => new Promise<number>(() => undefined));
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     enableReadAloud();
     submitAnswer("評価する回答です。");
     await screen.findByRole("button", { name: "停止する" });
@@ -475,7 +482,7 @@ describe("InterviewScreen の読み上げモード", () => {
     mocks.createEvaluation
       .mockRejectedValueOnce(new Error("evaluation failed"))
       .mockResolvedValueOnce(90);
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     submitAnswer("再試行する回答です。");
     await screen.findByText("次の質問です。");
 
@@ -506,7 +513,7 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("回答前のホーム操作は確認と評価なしで一度だけ遷移する", () => {
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: "ホーム" }));
 
@@ -524,7 +531,7 @@ describe("InterviewScreen の読み上げモード", () => {
         return new Promise<string>(() => undefined);
       },
     );
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     submitAnswer("破棄する回答です。");
     await waitFor(() => expect(mocks.requestNextQuestion).toHaveBeenCalledOnce());
 
@@ -554,7 +561,7 @@ describe("InterviewScreen の読み上げモード", () => {
   it("設定した上限で終了し、会話を確認して評価を見るまでAPIと遷移を待つ", async () => {
     let resolveEvaluation!: (evaluationId: number) => void;
     mocks.search =
-      "companyId=7&strength=hard&answerMethod=text&readAloud=disabled&maxTurns=2";
+      "companyId=7&strength=hard&readAloud=disabled&maxTurns=2";
     mocks.requestNextQuestion.mockResolvedValue("2つ目の質問です。");
     mocks.createEvaluation.mockImplementation(
       () =>
@@ -562,7 +569,7 @@ describe("InterviewScreen の読み上げモード", () => {
           resolveEvaluation = resolve;
         }),
     );
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     submitAnswer("1つ目の回答です。");
     expect(await screen.findByText("2つ目の質問です。")).toBeInTheDocument();
@@ -581,9 +588,7 @@ describe("InterviewScreen の読み上げモード", () => {
     expect(
       screen.getByPlaceholderText("回答を入力してください"),
     ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "文字入力で回答" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "送信する" })).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "面接を終える" }),
     ).not.toBeInTheDocument();
@@ -620,8 +625,8 @@ describe("InterviewScreen の読み上げモード", () => {
 
   it("文字入力はフィラーを計数・表示せず、定量スコアなしで評価する", async () => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=1";
-    render(<InterviewScreen mode="interview" />);
+      "companyId=7&strength=standard&readAloud=disabled&maxTurns=1";
+    render(<InterviewScreen mode="interview" {...screenProps} />);
 
     submitAnswer("えー、あの、文字入力の回答です。");
 
@@ -644,8 +649,8 @@ describe("InterviewScreen の読み上げモード", () => {
   });
 
   it("チュートリアルは1回答で終了し、終了表示だけではchat・TTS・評価を呼ばない", async () => {
-    mocks.search = "answerMethod=text&maxTurns=25";
-    render(<InterviewScreen mode="tutorial" />);
+    mocks.search = "readAloud=disabled&maxTurns=25";
+    render(<InterviewScreen mode="tutorial" {...screenProps} />);
 
     submitAnswer("自己紹介の回答です。");
 
@@ -680,13 +685,35 @@ describe("InterviewScreen の読み上げモード", () => {
     );
   });
 
+  it("チュートリアルでも読み上げるを選ぶと最初の質問を自動再生し、途中で切り替えられる", async () => {
+    mocks.search = "readAloud=enabled";
+    render(<InterviewScreen mode="tutorial" {...screenProps} />);
+
+    expect(screen.getByText(TUTORIAL_QUESTION)).toBeInTheDocument();
+    await waitFor(() => expect(mocks.synthesizeSpeech).toHaveBeenCalledOnce());
+    expect(mocks.synthesizeSpeech).toHaveBeenCalledWith(
+      TUTORIAL_QUESTION,
+      expect.any(AbortSignal),
+    );
+    expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+    );
+
+    await waitFor(() =>
+      expect(FakeAudio.instances[0].pause).toHaveBeenCalled(),
+    );
+    expect(mocks.getCompany).not.toHaveBeenCalled();
+  });
+
   it("評価開始に失敗しても終了時の会話を保持し、評価を見るから再試行できる", async () => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=text&readAloud=disabled&maxTurns=1";
+      "companyId=7&strength=standard&readAloud=disabled&maxTurns=1";
     mocks.createEvaluation
       .mockRejectedValueOnce(new Error("evaluation failed"))
       .mockResolvedValueOnce(89);
-    render(<InterviewScreen mode="interview" />);
+    render(<InterviewScreen mode="interview" {...screenProps} />);
     submitAnswer("保持する回答です。");
 
     const evaluationButton = await screen.findByRole("button", {
