@@ -53,6 +53,7 @@ const COMPLETION_TURN: ChatTurn = {
   role: "assistant",
   content: "お疲れ様でした",
 };
+const INTERVIEWER_SPEECH_PLAYBACK_RATE = 1.2;
 
 type SpeechState = {
   turnIndex: number | null;
@@ -210,6 +211,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         speechObjectUrlRef.current = objectUrl;
         audioRef.current ??= new Audio();
         audioRef.current.src = objectUrl;
+        audioRef.current.playbackRate = INTERVIEWER_SPEECH_PLAYBACK_RATE;
         audioRef.current.onended = () => {
           if (operationId !== speechOperationIdRef.current) return;
           speechOperationIdRef.current += 1;
