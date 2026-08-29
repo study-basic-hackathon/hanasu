@@ -290,6 +290,11 @@ export function VoiceAnswerPanel({
   const closeSegment = useCallback(() => {
     const segment = segmentRef.current;
     if (!segment || segment.recorder.state !== "recording") return;
+    // setSending(true) で listening が false になり、面接官の番として
+    // discardSegment() が走る effect が発火する。先に ref を外しておかないと
+    // 送信待ちのこの区間を discard 扱いにしてしまい、stop イベントが来ても
+    // sendSegment() が呼ばれず sending が true のまま固まる
+    segmentRef.current = null;
     setHeard(false);
     setSilence(0);
     setSending(true);

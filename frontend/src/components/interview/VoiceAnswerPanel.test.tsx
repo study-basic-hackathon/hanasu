@@ -59,8 +59,26 @@ class FakeMediaRecorder {
     this.emit("stop", new Event("stop"));
   }
 
-  private emit(type: string, event: Event) {
+  protected emit(type: string, event: Event) {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+/**
+ * 実ブラウザの MediaRecorder は stop() 呼び出し直後に state だけ同期的に
+ * inactive へ変わり、"stop" イベント自体は後続のタスクとして遅れて届く。
+ * 「区切って送る」区間を listening 変化の effect が discard 扱いにする
+ * レースを再現するため、そのタイミングだけ意図的にずらす
+ */
+class DeferredStopMediaRecorder extends FakeMediaRecorder {
+  stop() {
+    if (this.state !== "recording") return;
+    this.state = "inactive";
+    const data = new Blob(["recorded-audio"], { type: this.mimeType });
+    setTimeout(() => {
+      this.emit("dataavailable", { data } as BlobEvent);
+      this.emit("stop", new Event("stop"));
+    }, 0);
   }
 }
 
@@ -439,6 +457,31 @@ describe("VoiceAnswerPanel の常時録音", () => {
     expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
       "/interview/text?companyId=7&strength=standard&readAloud=enabled&maxTurns=10",
     );
+  });
+
+  it("「次の質問へ」の直後に面接官の番へ切り替わっても、区間を送り届ける", async () => {
+    // stop() の "stop" イベントが遅れて届く実ブラウザの挙動を再現する
+    vi.stubGlobal("MediaRecorder", DeferredStopMediaRecorder);
+    const onSubmit = vi.fn();
+    await renderPanel({ onSubmit });
+
+    inputLevel = 40;
+    await advance(1_500);
+    inputLevel = 0;
+
+    fireEvent.click(screen.getByRole("button", { name: "次の質問へ" }));
+    // recorder.stop() 直後、まだ "stop" イベントは届いていない
+    expect(screen.getByText("文字起こししています")).toBeInTheDocument();
+
+    // 遅れて届く "stop" イベントを流す
+    await advance(0);
+
+    expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+      "回答です。",
+      expect.objectContaining({ rawContent: "%えー% 回答です。" }),
+    );
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
   });
 
   it("使い方を求められたら常時録音の約束ごとを示す", async () => {
