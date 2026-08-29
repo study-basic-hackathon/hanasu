@@ -30,7 +30,7 @@ const MIC_UNAVAILABLE_MESSAGE =
   "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。";
 
 const HELP_TEXT =
-  "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。待たずに送りたいときは「次の質問へ」を押してください。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。";
+  "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。待たずに送りたいときは「次の質問へ」を押してください。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。読み上げを最後まで聞かずに答えたいときは「質問に答える」を押してください。";
 
 /** 入力レベルの取りうる幅。外周リングの広がりに使う */
 const MAX_INPUT_LEVEL = 60;
@@ -68,6 +68,7 @@ export function VoiceAnswerPanel({
   waiting,
   disabled,
   interviewerSpeaking,
+  onSkipInterviewerSpeech,
   speechPlaybackRate,
   onChangeSpeechPlaybackRate,
   exitSignal,
@@ -453,15 +454,24 @@ export function VoiceAnswerPanel({
           </button>
         </div>
 
-        {/* 無音を待たずに回答を確定させる。何も話していないうちは押せない */}
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!listening || !heard}
-          onClick={closeSegment}
-        >
-          次の質問へ
-        </Button>
+        {/*
+          読み上げ中は読み上げを飛ばして答え始める操作にする。
+          それ以外は、無音を待たずに回答を確定させる（何も話していないうちは押せない）
+        */}
+        {interviewerSpeaking ? (
+          <Button variant="secondary" size="sm" onClick={onSkipInterviewerSpeech}>
+            質問に答える
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!listening || !heard}
+            onClick={closeSegment}
+          >
+            次の質問へ
+          </Button>
+        )}
 
         {openedPopover === "settings" && (
           <VoiceSettingsPanel

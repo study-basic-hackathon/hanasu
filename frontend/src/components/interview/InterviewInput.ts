@@ -26,6 +26,8 @@ export type InterviewInputProps = {
    * 常時録音では、この間もマイクを止めて自分の声だけを拾う（S-08 6.1）。
    */
   interviewerSpeaking: boolean;
+  /** 読み上げを途中で止めて、すぐ答えられるようにする */
+  onSkipInterviewerSpeech: () => void;
   /** 面接官の読み上げ速度（倍）。音声入力モードの設定パネルから変える */
   speechPlaybackRate: number;
   onChangeSpeechPlaybackRate: (rate: number) => void;

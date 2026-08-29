@@ -276,7 +276,7 @@ async function mockStt(page: Page) {
  * 常時録音へ1発話ぶん話しかける。
  * 声を出してから黙り、無音の長さぶん待つと発話が確定して送られる。
  */
-async function speakAnswer(page: Page, silenceMs = 2_400) {
+async function speakAnswer(page: Page, silenceMs = 3_200) {
   await page.evaluate(() => {
     (window as unknown as { __inputLevel: number }).__inputLevel = 40;
   });

@@ -729,6 +729,7 @@ export function InterviewScreen({
             waiting={waiting || evaluating}
             disabled={hasReachedTurnLimit}
             interviewerSpeaking={interviewerSpeaking}
+            onSkipInterviewerSpeech={stopSpeech}
             speechPlaybackRate={speechPlaybackRate}
             onChangeSpeechPlaybackRate={changeSpeechPlaybackRate}
             exitSignal={interviewController.signal}

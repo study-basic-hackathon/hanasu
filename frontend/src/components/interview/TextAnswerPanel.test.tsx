@@ -21,6 +21,7 @@ describe("TextAnswerPanel", () => {
         waiting={options.waiting ?? false}
         disabled={options.disabled ?? false}
         interviewerSpeaking={false}
+        onSkipInterviewerSpeech={vi.fn()}
         speechPlaybackRate={1.2}
         onChangeSpeechPlaybackRate={vi.fn()}
         exitSignal={options.exitSignal ?? new AbortController().signal}

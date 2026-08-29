@@ -97,6 +97,7 @@ type PanelOptions = {
   waiting?: boolean;
   disabled?: boolean;
   interviewerSpeaking?: boolean;
+  onSkipInterviewerSpeech?: () => void;
   speechPlaybackRate?: number;
   onChangeSpeechPlaybackRate?: (rate: number) => void;
   exitSignal?: AbortSignal;
@@ -140,6 +141,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
       waiting: options.waiting ?? false,
       disabled: options.disabled ?? false,
       interviewerSpeaking: options.interviewerSpeaking ?? false,
+      onSkipInterviewerSpeech: options.onSkipInterviewerSpeech ?? vi.fn(),
       speechPlaybackRate: options.speechPlaybackRate ?? 1.2,
       onChangeSpeechPlaybackRate:
         options.onChangeSpeechPlaybackRate ?? vi.fn(),
@@ -262,6 +264,35 @@ describe("VoiceAnswerPanel の常時録音", () => {
       "回答です。",
       expect.objectContaining({ rawContent: "%えー% 回答です。" }),
     );
+  });
+
+  it("読み上げ中は読み上げを飛ばす「質問に答える」に変わる", async () => {
+    const onSkipInterviewerSpeech = vi.fn();
+    const { rerender } = await renderPanel({ onSkipInterviewerSpeech });
+
+    expect(
+      screen.getByRole("button", { name: "次の質問へ" }),
+    ).toBeInTheDocument();
+
+    rerender({ interviewerSpeaking: true });
+
+    expect(
+      screen.queryByRole("button", { name: "次の質問へ" }),
+    ).not.toBeInTheDocument();
+    const answerButton = screen.getByRole("button", { name: "質問に答える" });
+    expect(answerButton).toBeEnabled();
+
+    fireEvent.click(answerButton);
+
+    expect(onSkipInterviewerSpeech).toHaveBeenCalledOnce();
+
+    // 読み上げが止まれば聞き取りへ戻り、ボタンも元へ戻る
+    rerender({ interviewerSpeaking: false });
+
+    expect(
+      screen.getByRole("button", { name: "次の質問へ" }),
+    ).toBeInTheDocument();
+    expect(track.enabled).toBe(true);
   });
 
   it("ミュートで聞くのをやめ、もう一度押すと戻る", async () => {

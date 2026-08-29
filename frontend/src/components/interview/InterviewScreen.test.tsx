@@ -23,6 +23,7 @@ const screenProps = {
 /** 入力パネルへ渡す値と、そこからの変更を確かめるための差し込み */
 function ProbeInputPanel({
   interviewerSpeaking,
+  onSkipInterviewerSpeech,
   speechPlaybackRate,
   onChangeSpeechPlaybackRate,
 }: InterviewInputProps) {
@@ -32,6 +33,9 @@ function ProbeInputPanel({
       <span>読み上げ速度: {speechPlaybackRate.toFixed(1)}</span>
       <button type="button" onClick={() => onChangeSpeechPlaybackRate(1.8)}>
         速度を上げる
+      </button>
+      <button type="button" onClick={onSkipInterviewerSpeech}>
+        読み上げを飛ばす
       </button>
     </div>
   );
@@ -748,6 +752,13 @@ describe("InterviewScreen の読み上げモード", () => {
 
     expect(screen.getByText("読み上げ速度: 1.8")).toBeInTheDocument();
     expect(FakeAudio.instances[0].playbackRate).toBe(1.8);
+
+    // 入力パネルからの操作で読み上げを打ち切り、すぐ答えられる状態へ戻す
+    fireEvent.click(screen.getByRole("button", { name: "読み上げを飛ばす" }));
+
+    expect(FakeAudio.instances[0].pause).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:question-1");
+    expect(screen.getByText("面接官の発話: なし")).toBeInTheDocument();
   });
 
   it("評価開始に失敗しても終了時の会話を保持し、評価を見るから再試行できる", async () => {
