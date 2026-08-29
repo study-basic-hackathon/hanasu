@@ -40,7 +40,7 @@
 |---|---|---|---|---|
 | S-01 | サインイン | 作る | サインインする | `POST /token` |
 | S-03 | チュートリアル | 作る（S-08 を流用） | 画面表示 | （なし。最初の質問は固定文字列） |
-| S-03 | | | 回答する（音声） | `POST /interviews/stt` |
+| S-03 | | | 回答する（音声入力） | `POST /interviews/stt` |
 | S-03 | | | 終える | `POST /evaluations`（**企業IDなし**）→ `GET /evaluations/{id}` をポーリング |
 | S-04 | ホーム | 作る | 画面表示 | `GET /evaluations`（**全件から直近1件と件数を拾う**） |
 | S-04 | | | 画面表示 | `GET /companies`（**登録件数の表示に使う**） |
@@ -52,7 +52,7 @@
 | S-07 | | | 募集要項の要約 | `POST /job-postings/summary` |
 | S-07 | | | 保存する | 新規は `POST /companies`、編集は `PUT /companies/{company_id}` |
 | S-08 | 本番モード | 作る | 画面表示 | `POST /interviews/start`（**任意**。当面はフロントの固定文字列） |
-| S-08 | | | 回答する（音声） | `POST /interviews/stt` → `POST /interviews/chat` |
+| S-08 | | | 回答する（音声入力） | `POST /interviews/stt` → `POST /interviews/chat` |
 | S-08 | | | 回答する（文字入力） | `POST /interviews/chat`（**STT を経由しない**） |
 | S-08 | | | 面接官の発言を読み上げる | `POST /interviews/tts`（**任意**。作らない場合は「読み上げる」を出さない） |
 | S-08 | | | 中断する、またはターン上限到達後に評価を見る | `POST /evaluations` |
@@ -71,7 +71,8 @@
 ### 呼び出しの要点
 
 - **`POST /interviews/chat` には、企業ID・質問の強度・会話履歴を毎ターン送る。** カスタム選択時は自然言語の質問強度も毎ターン添える。サーバーが会話状態を持たないため
-- **`POST /interviews/stt` は毎ターン呼ばれるとは限らない。** 文字入力のターンは STT を経由せず `chat` に直接届く
+- **`POST /interviews/stt` は毎ターン呼ばれるとは限らない。** 文字入力モードのターンは STT を経由せず `chat` に直接届く
+- **回答方式はページで決まり、面接の途中では変わらない。** 1回の面接で `stt` を経由するかどうかは最初から一定である
 - **合否の目安は API から返らない。** S-14 が総合スコアから判定する（当面はハードコード）
 - **全 API に `Authorization: Bearer <access_token>` を付ける。** トークンが無効なら S-01 へ戻す（挙動の定義は [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の共通仕様）
 
