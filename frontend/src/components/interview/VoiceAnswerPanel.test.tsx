@@ -279,10 +279,44 @@ describe("VoiceAnswerPanel の常時録音", () => {
     expect(mocks.transcribeAudio).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "マイクをオンにする" }));
+    fireEvent.click(screen.getByRole("button", { name: "ミュートを解除する" }));
 
     expect(track.enabled).toBe(true);
     expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+  });
+
+  it("面接官の番はマイクのボタンで止まっていると示し、ミュートを優先する", async () => {
+    const { rerender } = await renderPanel();
+
+    expect(
+      screen.getByRole("button", { name: "マイクをミュートする" }),
+    ).toBeInTheDocument();
+
+    rerender({ interviewerSpeaking: true });
+
+    expect(
+      screen.getByRole("button", {
+        name: "マイクをミュートする（いまは面接官の番で止まっています）",
+      }),
+    ).toBeInTheDocument();
+
+    // 面接官の番でも先回りしてミュートでき、そのときはミュートの表示が勝つ
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "マイクをミュートする（いまは面接官の番で止まっています）",
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "ミュートを解除する" }),
+    ).toBeInTheDocument();
+
+    rerender({ interviewerSpeaking: false });
+
+    expect(
+      screen.getByRole("button", { name: "ミュートを解除する" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("ミュート中。押すと再開します")).toBeInTheDocument();
   });
 
   it("文字が起きなかった区間は黙って捨てて聞き続ける", async () => {

@@ -380,6 +380,14 @@ export function VoiceAnswerPanel({
 
   // 外周リングは、聞いているあいだだけ音量で広がる
   const ringWidth = listening ? 6 + Math.round((level / MAX_INPUT_LEVEL) * 14) : 6;
+  // 面接官の番でマイクが止まっている状態。ミュートは自分で決めた状態なので優先して示す
+  const pausedForInterviewer =
+    !muted && (sending || waiting || interviewerSpeaking);
+  const micButtonLabel = muted
+    ? "ミュートを解除する"
+    : pausedForInterviewer
+      ? "マイクをミュートする（いまは面接官の番で止まっています）"
+      : "マイクをミュートする";
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -408,7 +416,7 @@ export function VoiceAnswerPanel({
 
           <button
             type="button"
-            aria-label={muted ? "マイクをオンにする" : "マイクをミュートする"}
+            aria-label={micButtonLabel}
             aria-pressed={muted}
             disabled={micState !== "ready" || disabled || hasExited}
             onClick={() => setMuted((current) => !current)}
@@ -417,7 +425,12 @@ export function VoiceAnswerPanel({
             }}
             className={cn(
               "grid size-16 flex-none place-items-center rounded-full transition-[box-shadow] duration-100 disabled:cursor-not-allowed disabled:opacity-50",
-              muted ? "bg-[#8a9299]" : "bg-accent",
+              muted
+                ? "bg-[#8a9299]"
+                : // 面接官の番はマイクが止まっているため、聞いているときと区別する
+                  pausedForInterviewer
+                  ? "bg-accent/40"
+                  : "bg-accent",
             )}
           >
             {muted ? (
