@@ -79,7 +79,7 @@ describe("TextAnswerPanel", () => {
     renderPanel();
 
     expect(
-      screen.queryByRole("button", { name: "音声で回答" }),
+      screen.queryByRole("button", { name: "音声入力で回答" }),
     ).not.toBeInTheDocument();
   });
 });

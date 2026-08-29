@@ -72,7 +72,7 @@ describe("PracticeSetupPage", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("この設定で本番モードを開始しますか？");
     expect(dialog).toHaveTextContent("対象企業株式会社テスト");
-    expect(dialog).toHaveTextContent("回答方式音声");
+    expect(dialog).toHaveTextContent("回答方式音声入力");
     expect(dialog).toHaveTextContent("質問の強度標準");
     expect(dialog).toHaveTextContent("最大ターン数10 ターン");
     expect(dialog).toHaveTextContent("読み上げモード読み上げる");

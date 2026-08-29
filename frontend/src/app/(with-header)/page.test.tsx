@@ -117,7 +117,7 @@ describe("HomePage のフィラー表示", () => {
 
     // ホームには選択の手掛かりがないため、音声入力・読み上げるが初期値になる
     expect(
-      screen.getByRole("button", { name: "回答方式: 音声" }),
+      screen.getByRole("button", { name: "回答方式: 音声入力" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
@@ -164,7 +164,7 @@ describe("HomePage のフィラー表示", () => {
     fireEvent.click(screen.getByRole("button", { name: "試してみる" }));
 
     expect(
-      screen.getByRole("button", { name: "回答方式: 音声" }),
+      screen.getByRole("button", { name: "回答方式: 音声入力" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 });

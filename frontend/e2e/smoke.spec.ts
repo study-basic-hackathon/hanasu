@@ -348,7 +348,7 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   await page.getByRole("button", { name: "本番モードを始める" }).click();
   const startDialog = page.getByRole("dialog");
   await expect(startDialog).toContainText(company.company_name);
-  await expect(startDialog).toContainText(/回答方式\s*音声/);
+  await expect(startDialog).toContainText(/回答方式\s*音声入力/);
   await expect(startDialog).toContainText(/質問の強度\s*標準/);
   await expect(startDialog).toContainText(/最大ターン数\s*10 ターン/);
   await expect(startDialog).toContainText(/読み上げモード\s*読み上げる/);

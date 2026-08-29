@@ -229,7 +229,7 @@ function PracticeSetupContent() {
           </div>
           {/* マイクの使用許可はこの画面では求めない（共通仕様 8章） */}
           <p className="text-note leading-[1.7] text-ink-muted">
-            音声を選ぶとマイクの使用許可を求めます。
+            音声入力を選ぶとマイクの使用許可を求めます。
           </p>
         </Card>
 

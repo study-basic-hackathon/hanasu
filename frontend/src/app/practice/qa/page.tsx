@@ -19,7 +19,7 @@ export default function QaPracticePage() {
         {/* モックのため切り替えは動かさず、文字入力を選んだ状態で見せる */}
         <div className="flex self-start overflow-hidden rounded-control border border-line-strong">
           <span className="grid h-[30px] place-items-center px-3.5 text-label text-ink-label">
-            音声
+            音声入力
           </span>
           <span className="grid h-[30px] place-items-center bg-accent px-3.5 text-label font-medium text-white">
             文字入力
