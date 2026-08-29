@@ -17,19 +17,22 @@ vi.mock("@/components/auth/AuthProvider", () => ({
 describe("GlobalHeader", () => {
   afterEach(() => cleanup());
 
-  it("モード未確定の設定導線はホームを開き、開始をホームに集約する", () => {
+  it("グローバルヘッダーは3項目のナビゲーションを持つ", () => {
     render(<GlobalHeader />);
 
     const navigation = screen.getByRole("navigation");
-    expect(within(navigation).getAllByRole("link")).toHaveLength(4);
-    expect(
-      within(navigation).getByRole("link", { name: "練習の設定" }),
-    ).toHaveAttribute("href", "/");
-    expect(
-      within(navigation).getByRole("link", { name: "練習の設定" }),
-    ).not.toHaveAttribute("aria-current");
+    expect(within(navigation).getAllByRole("link")).toHaveLength(3);
     expect(
       within(navigation).getByRole("link", { name: "ホーム" }),
     ).toHaveAttribute("href", "/");
+    expect(
+      within(navigation).getByRole("link", { name: "ホーム" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(navigation).getByRole("link", { name: "応募先企業" }),
+    ).toHaveAttribute("href", "/companies");
+    expect(
+      within(navigation).getByRole("link", { name: "履歴" }),
+    ).toHaveAttribute("href", "/evaluations");
   });
 });
