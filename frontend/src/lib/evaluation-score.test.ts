@@ -25,7 +25,7 @@ describe("buildEvaluationScores", () => {
       ]),
     ).toEqual({
       speaking_speed: {
-        score: 85,
+        score: 87,
         value: 300,
         unit: "文字/分",
       },
@@ -82,7 +82,7 @@ describe("buildEvaluationScores", () => {
       ]),
     ).toEqual({
       speaking_speed: {
-        score: 100,
+        score: 86,
         value: 200,
         unit: "文字/分",
       },

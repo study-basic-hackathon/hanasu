@@ -7,7 +7,7 @@ import {
 import { SPEAKING_SPEED_RANGE } from "@/lib/score";
 
 /** 見本の測定値 */
-const MEASURED = 312;
+const MEASURED = 250;
 
 /** 帯に描く速さの範囲 */
 const SCALE_MIN = 150;
