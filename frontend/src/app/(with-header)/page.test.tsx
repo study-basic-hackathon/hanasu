@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/(with-header)/page";
@@ -7,6 +7,11 @@ import type { Evaluation, QuantitativeScore } from "@/lib/domain";
 const mocks = vi.hoisted(() => ({
   listCompanies: vi.fn(),
   listEvaluations: vi.fn(),
+  push: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mocks.push }),
 }));
 
 vi.mock("@/lib/company-api", () => ({
@@ -102,5 +107,64 @@ describe("HomePage のフィラー表示", () => {
     expect(
       screen.getByRole("link", { name: "練習モードを始める" }),
     ).toHaveAttribute("href", "/practice/setup?mode=practice");
+  });
+
+  it("チュートリアルは方式を確認してから音声入力のページへ進む", async () => {
+    mocks.listEvaluations.mockResolvedValue([]);
+
+    render(<HomePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "試してみる" }));
+
+    // ホームには選択の手掛かりがないため、音声入力・読み上げるが初期値になる
+    expect(
+      screen.getByRole("button", { name: "回答方式: 音声入力" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "チュートリアルを始める" }),
+    );
+
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
+      "/tutorial/voice?readAloud=enabled",
+    );
+  });
+
+  it("チュートリアルの確認で文字入力と読み上げないを選んで進める", async () => {
+    mocks.listEvaluations.mockResolvedValue([]);
+
+    render(<HomePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "試してみる" }));
+    fireEvent.click(screen.getByRole("button", { name: "回答方式: 文字入力" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "チュートリアルを始める" }),
+    );
+
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
+      "/tutorial/text?readAloud=disabled",
+    );
+  });
+
+  it("チュートリアルの確認を取り消すと遷移せず、選択も持ち越さない", async () => {
+    mocks.listEvaluations.mockResolvedValue([]);
+
+    render(<HomePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "試してみる" }));
+    fireEvent.click(screen.getByRole("button", { name: "回答方式: 文字入力" }));
+    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "試してみる" }));
+
+    expect(
+      screen.getByRole("button", { name: "回答方式: 音声入力" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });

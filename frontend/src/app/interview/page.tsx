@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 
-import { InterviewScreen } from "@/components/interview/InterviewScreen";
+import { AnswerMethodRedirect } from "@/components/interview/AnswerMethodRedirect";
 
-/** S-08 本番モード。グローバルヘッダーを持たず、専用ヘッダーを使う */
+/** 回答方式を分ける前の URL。`/interview/voice`・`/interview/text` へ送る */
 export default function InterviewPage() {
   return (
     <Suspense fallback={<p className="p-8 text-body-sm text-ink-sub">面接を準備しています。</p>}>
-      <InterviewScreen mode="interview" />
+      <AnswerMethodRedirect mode="interview" />
     </Suspense>
   );
 }

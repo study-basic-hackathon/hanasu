@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -71,7 +72,7 @@ describe("PracticeSetupPage", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("この設定で本番モードを開始しますか？");
     expect(dialog).toHaveTextContent("対象企業株式会社テスト");
-    expect(dialog).toHaveTextContent("回答方式音声");
+    expect(dialog).toHaveTextContent("回答方式音声入力");
     expect(dialog).toHaveTextContent("質問の強度標準");
     expect(dialog).toHaveTextContent("最大ターン数10 ターン");
     expect(dialog).toHaveTextContent("読み上げモード読み上げる");
@@ -80,7 +81,7 @@ describe("PracticeSetupPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "開始する" }));
 
     expect(mocks.push).toHaveBeenCalledWith(
-      "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=enabled&maxTurns=10",
+      "/interview/voice?companyId=7&strength=standard&readAloud=enabled&maxTurns=10",
     );
   });
 
@@ -126,7 +127,7 @@ describe("PracticeSetupPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "開始する" }));
 
     expect(mocks.push).toHaveBeenCalledWith(
-      "/interview?companyId=7&strength=hard&answerMethod=text&readAloud=enabled&maxTurns=12",
+      "/interview/text?companyId=7&strength=hard&readAloud=enabled&maxTurns=12",
     );
   });
 
@@ -187,10 +188,39 @@ describe("PracticeSetupPage", () => {
       String(mocks.push.mock.calls[0][0]),
       "http://localhost",
     );
-    expect(destination.pathname).toBe("/interview");
+    expect(destination.pathname).toBe("/interview/voice");
     expect(destination.searchParams.get("strength")).toBe("custom");
     expect(destination.searchParams.get("customQuestionStrength")).toBe(
       instruction,
+    );
+  });
+
+  it("チュートリアルの確認はこの画面での選択を初期値にする", async () => {
+    render(<PracticeSetupPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "文字入力" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "先にチュートリアルを試す" }),
+    );
+
+    // 読み上げモードの切り替えは設定画面とダイアログの双方にあるため、ダイアログ内で探す
+    const dialog = within(screen.getByRole("dialog"));
+    expect(
+      dialog.getByRole("button", { name: "回答方式: 文字入力" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      dialog.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(
+      dialog.getByRole("button", { name: "チュートリアルを始める" }),
+    );
+
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
+      "/tutorial/text?readAloud=disabled",
     );
   });
 

@@ -14,7 +14,7 @@ export const QUESTION_STRENGTH_LABEL: Record<QuestionStrength, string> = {
 export type AnswerMethod = "voice" | "text";
 
 export const ANSWER_METHOD_LABEL: Record<AnswerMethod, string> = {
-  voice: "音声",
+  voice: "音声入力",
   text: "文字入力",
 };
 

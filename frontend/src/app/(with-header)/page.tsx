@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { TutorialStartDialog } from "@/components/interview/TutorialStartDialog";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { buttonClassName } from "@/components/ui/Button";
+import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DateTime } from "@/components/ui/DateTime";
 import { ScoreBar } from "@/components/ui/ScoreBar";
@@ -15,6 +16,7 @@ import {
   QUESTION_STRENGTH_LABEL,
 } from "@/lib/domain";
 import { listEvaluations } from "@/lib/evaluation-api";
+import { DEFAULT_READ_ALOUD_MODE } from "@/lib/interview";
 import { formatCount, formatFiller, formatSpeakingSpeed } from "@/lib/format";
 import { SCORE_TEXT_CLASS, scoreLevel, scorePercent } from "@/lib/score";
 
@@ -180,6 +182,7 @@ export default function HomePage() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startingTutorial, setStartingTutorial] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -280,12 +283,15 @@ export default function HomePage() {
             <p className="text-label leading-[1.8] text-ink-sub">
               「1分で自己紹介してください」の1問だけ。応募企業情報の登録なしで試せます。
             </p>
-            <Link
-              href="/tutorial"
-              className={buttonClassName("outline", "sm", "w-full")}
+            {/* 回答方式と読み上げモードを1回確認してから S-03 へ進む */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setStartingTutorial(true)}
             >
               試してみる
-            </Link>
+            </Button>
           </Card>
         </div>
       </div>
@@ -313,6 +319,13 @@ export default function HomePage() {
           href="/evaluations"
         />
       </div>
+
+      <TutorialStartDialog
+        open={startingTutorial}
+        defaultAnswerMethod="voice"
+        defaultReadAloudMode={DEFAULT_READ_ALOUD_MODE}
+        onCancel={() => setStartingTutorial(false)}
+      />
     </PageContainer>
   );
 }

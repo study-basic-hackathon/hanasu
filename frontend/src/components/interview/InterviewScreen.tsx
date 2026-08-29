@@ -4,14 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  AnswerPanel,
-  type AnswerDetail,
-} from "@/components/interview/AnswerPanel";
-import {
   ChatMessage,
   type SpeechStatus,
   ThinkingMessage,
 } from "@/components/interview/ChatMessage";
+import type {
+  AnswerDetail,
+  InterviewInputPanel,
+} from "@/components/interview/InterviewInput";
 import { SessionHeader } from "@/components/layout/SessionHeader";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -36,6 +36,7 @@ import {
   TRANSCRIPT_DISPLAY_MODE_LABEL,
 } from "@/lib/domain";
 import {
+  DEFAULT_SPEECH_PLAYBACK_RATE,
   FIRST_QUESTION,
   resolveMaxTurns,
   resolveReadAloudMode,
@@ -53,7 +54,6 @@ const COMPLETION_TURN: ChatTurn = {
   role: "assistant",
   content: "お疲れ様でした",
 };
-const INTERVIEWER_SPEECH_PLAYBACK_RATE = 1.2;
 
 type SpeechState = {
   turnIndex: number | null;
@@ -81,16 +81,24 @@ function customQuestionStrengthOf(value: string | null): string | null {
     : null;
 }
 
-function answerMethodOf(value: string | null): AnswerMethod | null {
-  return value === "voice" || value === "text" ? value : null;
-}
-
 function nowClock(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-export function InterviewScreen({ mode }: { mode: InterviewMode }) {
+type InterviewScreenProps = {
+  mode: InterviewMode;
+  /** 回答方式はページで決まる。画面の中では切り替えない */
+  answerMethod: AnswerMethod;
+  /** 回答方式ごとの入力エリア */
+  InputPanel: InterviewInputPanel;
+};
+
+export function InterviewScreen({
+  mode,
+  answerMethod,
+  InputPanel,
+}: InterviewScreenProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isTutorial = mode === "tutorial";
@@ -117,8 +125,6 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     questionStrength === "custom"
       ? (configuredCustomQuestionStrength ?? undefined)
       : undefined;
-  const configuredAnswerMethod =
-    answerMethodOf(searchParams.get("answerMethod")) ?? "voice";
   const configuredReadAloudMode = resolveReadAloudMode(
     searchParams.get("readAloud"),
   );
@@ -128,15 +134,16 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
       ? [{ role: "assistant", content: TUTORIAL_QUESTION }]
       : [{ role: "assistant", content: FIRST_QUESTION }],
   );
-  const [answerMethod, setAnswerMethod] = useState<AnswerMethod>(
-    configuredAnswerMethod,
-  );
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     configuredReadAloudMode,
   );
   const [transcriptDisplayMode, setTranscriptDisplayMode] =
     useState<TranscriptDisplayMode>(() => (isTutorial ? "clean" : "raw"));
   const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
+  // 読み上げ速度は入力パネルの設定から変える。再生中の音声にも即座に効かせる
+  const [speechPlaybackRate, setSpeechPlaybackRate] = useState(
+    DEFAULT_SPEECH_PLAYBACK_RATE,
+  );
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [exitAction, setExitAction] = useState<ExitAction | null>(null);
@@ -156,8 +163,15 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
   const initialAutoSpeechStartedRef = useRef(false);
   const pendingAutoSpeechIndexRef = useRef<number | null>(null);
   const interviewControllerRef = useRef(interviewController);
+  const speechPlaybackRateRef = useRef(speechPlaybackRate);
   const chatControllerRef = useRef<AbortController | null>(null);
   const exitStartedRef = useRef(false);
+
+  const changeSpeechPlaybackRate = useCallback((rate: number) => {
+    speechPlaybackRateRef.current = rate;
+    setSpeechPlaybackRate(rate);
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, []);
 
   const releaseSpeech = useCallback(() => {
     speechControllerRef.current?.abort();
@@ -211,7 +225,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         speechObjectUrlRef.current = objectUrl;
         audioRef.current ??= new Audio();
         audioRef.current.src = objectUrl;
-        audioRef.current.playbackRate = INTERVIEWER_SPEECH_PLAYBACK_RATE;
+        audioRef.current.playbackRate = speechPlaybackRateRef.current;
         audioRef.current.onended = () => {
           if (operationId !== speechOperationIdRef.current) return;
           speechOperationIdRef.current += 1;
@@ -258,20 +272,21 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     };
   }, [releaseSpeech]);
 
+  // 最初の質問だけは会話 API を経由しないため、ここで読み上げを始める
   useEffect(() => {
     if (
-      isTutorial ||
       configuredReadAloudMode !== "enabled" ||
       initialAutoSpeechStartedRef.current
     ) {
       return;
     }
 
+    const firstQuestion = isTutorial ? TUTORIAL_QUESTION : FIRST_QUESTION;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled || initialAutoSpeechStartedRef.current) return;
       initialAutoSpeechStartedRef.current = true;
-      void startSpeech(0, FIRST_QUESTION);
+      void startSpeech(0, firstQuestion);
     });
 
     return () => {
@@ -312,6 +327,9 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     return () => controller.abort();
   }, [companyId, isTutorial]);
 
+  // 生成中も「面接官の番」に含める。常時録音はこの間マイクを止める（S-08 6.1）
+  const interviewerSpeaking =
+    speechState.status === "loading" || speechState.status === "playing";
   const answeredTurns = turns.filter((turn) => turn.role === "user").length;
   // 回答を送るまでは、いま答えようとしているターンの番号（S-08 4章）
   const currentTurn = Math.min(answeredTurns + 1, maxTurns);
@@ -580,36 +598,34 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
           <Chip tone="muted" className="px-2.5 py-[5px] text-label">
             回答方式：{ANSWER_METHOD_LABEL[answerMethod]}
           </Chip>
-          {!isTutorial && (
-            <div className="flex items-center gap-2 text-label text-ink-sub">
-              <span>読み上げ：</span>
-              <div className="flex overflow-hidden rounded-control border border-line-strong">
-                {READ_ALOUD_MODES.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
-                    aria-pressed={readAloudMode === value}
-                    onClick={() => {
-                      if (value === readAloudMode) return;
-                      setReadAloudMode(value);
-                      if (value === "disabled") {
-                        stopSpeech();
-                      }
-                    }}
-                    className={cn(
-                      "h-7 px-2.5 text-note",
-                      readAloudMode === value
-                        ? "bg-accent font-medium text-white"
-                        : "bg-surface text-ink-label hover:bg-canvas",
-                    )}
-                  >
-                    {READ_ALOUD_MODE_LABEL[value]}
-                  </button>
-                ))}
-              </div>
+          <div className="flex items-center gap-2 text-label text-ink-sub">
+            <span>読み上げ：</span>
+            <div className="flex overflow-hidden rounded-control border border-line-strong">
+              {READ_ALOUD_MODES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
+                  aria-pressed={readAloudMode === value}
+                  onClick={() => {
+                    if (value === readAloudMode) return;
+                    setReadAloudMode(value);
+                    if (value === "disabled") {
+                      stopSpeech();
+                    }
+                  }}
+                  className={cn(
+                    "h-7 px-2.5 text-note",
+                    readAloudMode === value
+                      ? "bg-accent font-medium text-white"
+                      : "bg-surface text-ink-label hover:bg-canvas",
+                  )}
+                >
+                  {READ_ALOUD_MODE_LABEL[value]}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
           {!isTutorial && (
             <div className="flex items-center gap-2 text-label text-ink-sub">
               <span>会話ログ：</span>
@@ -708,12 +724,14 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
               </Button>
             </div>
           )}
-          <AnswerPanel
-            answerMethod={answerMethod}
-            onChangeAnswerMethod={setAnswerMethod}
+          <InputPanel
             onSubmit={handleSubmit}
             waiting={waiting || evaluating}
             disabled={hasReachedTurnLimit}
+            interviewerSpeaking={interviewerSpeaking}
+            onSkipInterviewerSpeech={stopSpeech}
+            speechPlaybackRate={speechPlaybackRate}
+            onChangeSpeechPlaybackRate={changeSpeechPlaybackRate}
             exitSignal={interviewController.signal}
           />
           <p className="text-note text-ink-muted">
