@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/(with-header)/page";
@@ -54,6 +60,44 @@ function scoreBar(container: HTMLElement): HTMLElement {
   return bar;
 }
 
+function scoreRow(label: string): HTMLElement {
+  const row = screen.getByText(label).parentElement?.parentElement;
+  if (!row) throw new Error(`${label} の行が見つかりません。`);
+  return row;
+}
+
+describe("HomePage の項目別スコアの表記", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listCompanies.mockResolvedValue([]);
+  });
+
+  afterEach(() => cleanup());
+
+  it("点数を単位付きで出し、実測値とは別の要素に分ける", async () => {
+    mocks.listEvaluations.mockResolvedValue([completedEvaluation()]);
+
+    render(<HomePage />);
+
+    await screen.findByText("話の速さ");
+    const row = scoreRow("話の速さ");
+    expect(row).toHaveTextContent("72 点");
+    expect(within(row).getByText("284 文字/分")).toBeVisible();
+    expect(within(row).getByText("284 文字/分")).toHaveClass("text-ink-muted");
+  });
+
+  it("構成・内容は点数の書式を揃え、実測値を持たないことを示す", async () => {
+    mocks.listEvaluations.mockResolvedValue([completedEvaluation()]);
+
+    render(<HomePage />);
+
+    await screen.findByText("構成・内容");
+    const row = scoreRow("構成・内容");
+    expect(row).toHaveTextContent("75 点");
+    expect(within(row).getByText("AI 評価")).toBeVisible();
+  });
+});
+
 describe("HomePage のフィラー表示", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,9 +120,10 @@ describe("HomePage のフィラー表示", () => {
 
     await screen.findByText("フィラーの数");
     const row = fillerRow();
-    expect(row).toHaveTextContent("64 / 9.0 回/分");
+    expect(row).toHaveTextContent("64 点");
+    expect(row).toHaveTextContent("9.0 回/分");
     expect(row).not.toHaveTextContent("2 回");
-    expect(row.firstElementChild?.lastElementChild).toHaveClass(
+    expect(row.firstElementChild?.lastElementChild?.firstElementChild).toHaveClass(
       "text-warning",
     );
     expect(scoreBar(row).firstElementChild).toHaveClass("bg-warning");
@@ -92,7 +137,9 @@ describe("HomePage のフィラー表示", () => {
 
     await screen.findByText("フィラーの数");
     const row = fillerRow();
-    expect(row).toHaveTextContent("— / 計測対象外");
+    expect(row).toHaveTextContent("—");
+    expect(row).toHaveTextContent("計測対象外");
+    expect(row).not.toHaveTextContent("点");
     expect(scoreBar(row)).toBeEmptyDOMElement();
   });
 

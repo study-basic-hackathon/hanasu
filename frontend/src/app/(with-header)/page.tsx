@@ -9,6 +9,7 @@ import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DateTime } from "@/components/ui/DateTime";
 import { ScoreBar } from "@/components/ui/ScoreBar";
+import { ScoreValue } from "@/components/ui/ScoreValue";
 import { listCompanies } from "@/lib/company-api";
 import type { Evaluation } from "@/lib/domain";
 import {
@@ -18,7 +19,7 @@ import {
 import { listEvaluations } from "@/lib/evaluation-api";
 import { DEFAULT_READ_ALOUD_MODE } from "@/lib/interview";
 import { formatCount, formatFiller, formatSpeakingSpeed } from "@/lib/format";
-import { SCORE_TEXT_CLASS, scoreLevel, scorePercent } from "@/lib/score";
+import { scorePercent } from "@/lib/score";
 
 /** 総合スコアの円。円の内側に数値、その下に `総合スコア`（S-04 3.2） */
 function TotalScoreCircle({ score }: { score: number }) {
@@ -46,23 +47,16 @@ function ScoreRow({
 }: {
   label: string;
   score: number | null;
-  measured?: string;
+  measured: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex justify-between text-label">
         <span className="text-ink-label">{label}</span>
-        <span
-          className={
-            score === null
-              ? "text-ink-muted"
-              : SCORE_TEXT_CLASS[scoreLevel(score)]
-          }
-        >
-          {score ?? "—"}
-          {measured && (
-            <span className="text-ink-muted"> / {measured}</span>
-          )}
+        {/* 点数と実測値は別の要素に分け、点数には単位を付ける（S-04 3.2） */}
+        <span className="flex items-baseline gap-2">
+          <ScoreValue score={score} />
+          <span className="text-ink-muted">{measured}</span>
         </span>
       </div>
       {score === null ? (
@@ -114,9 +108,11 @@ function LatestEvaluationCard({ evaluation }: { evaluation: Evaluation }) {
                 : "計測対象外"
             }
           />
+          {/* 構成・内容は実測値を持たない（S-04 3.2） */}
           <ScoreRow
             label="構成・内容"
             score={scores.structure_content.score}
+            measured="AI 評価"
           />
         </div>
       </div>
