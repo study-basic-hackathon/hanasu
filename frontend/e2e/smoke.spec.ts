@@ -344,7 +344,7 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   await expect(startDialog).toContainText(/回答方式\s*音声/);
   await expect(startDialog).toContainText(/質問の強度\s*標準/);
   await expect(startDialog).toContainText(/最大ターン数\s*10 ターン/);
-  await expect(startDialog).toContainText(/読み上げモード\s*読み上げない/);
+  await expect(startDialog).toContainText(/読み上げモード\s*読み上げる/);
   await startDialog.getByRole("button", { name: "取り消す" }).click();
   await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
   await expect(
@@ -356,7 +356,7 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
     .getByRole("dialog")
     .getByRole("button", { name: "開始する" })
     .click();
-  await expect(page).toHaveURL(/\/interview\?.*companyId=1/);
+  await expect(page).toHaveURL(/\/interview\?.*companyId=1.*readAloud=enabled/);
 
   await page.goto("/");
   await page.getByRole("link", { name: "練習モードを始める" }).click();
@@ -710,7 +710,7 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
     });
   });
   await page.goto(
-    "/interview?companyId=1&strength=hard&answerMethod=voice&maxTurns=2",
+    "/interview?companyId=1&strength=hard&answerMethod=voice&readAloud=disabled&maxTurns=2",
   );
 
   const cleanButton = page.getByRole("button", {
@@ -719,7 +719,7 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
   const rawButton = page.getByRole("button", {
     name: "文字起こし表示: フィラーあり",
   });
-  await expect(cleanButton).toHaveAttribute("aria-pressed", "true");
+  await expect(rawButton).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "回答を録音する" }).click();
   await page.waitForTimeout(1_100);
@@ -727,17 +727,14 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
     .getByRole("button", { name: "録音を停止して送信する" })
     .click();
 
-  await expect(page.getByText("回答です。", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("経験から学んだことを教えてください。"),
-  ).toBeVisible();
-  await rawButton.click();
   await expect(page.getByText("えー", { exact: true })).toHaveClass(
     /text-accent/,
   );
   await expect(
-    page.getByText("%えー% 回答です。", { exact: true }),
-  ).toHaveCount(0);
+    page.getByText("経験から学んだことを教えてください。"),
+  ).toBeVisible();
+  await cleanButton.click();
+  await expect(page.getByText("回答です。", { exact: true })).toBeVisible();
   expect(sttRequestCount()).toBe(1);
   expect(chatRequestCount).toBe(1);
 
@@ -747,10 +744,10 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
     .getByRole("button", { name: "録音を停止して送信する" })
     .click();
 
-  await expect(page.getByText("えー", { exact: true })).toHaveCount(2);
-  await cleanButton.click();
   await expect(page.getByText("回答です。", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("えー", { exact: true })).toHaveCount(0);
+  await rawButton.click();
+  await expect(page.getByText("えー", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("回答です。", { exact: true })).toHaveCount(0);
   expect(sttRequestCount()).toBe(2);
   expect(chatRequestCount).toBe(1);
 });

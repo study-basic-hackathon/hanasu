@@ -120,7 +120,7 @@ describe("InterviewScreen の読み上げモード", () => {
     );
   }
 
-  it("文字起こし表示はフィラーなしを初期値とし、会話APIを呼ばずに切り替える", () => {
+  it("本番モードの文字起こし表示はフィラーありを初期値とし、会話APIを呼ばずに切り替える", () => {
     render(<InterviewScreen mode="interview" />);
 
     const cleanButton = screen.getByRole("button", {
@@ -129,13 +129,13 @@ describe("InterviewScreen の読み上げモード", () => {
     const rawButton = screen.getByRole("button", {
       name: "文字起こし表示: フィラーあり",
     });
-    expect(cleanButton).toHaveAttribute("aria-pressed", "true");
-    expect(rawButton).toHaveAttribute("aria-pressed", "false");
-
-    fireEvent.click(rawButton);
-
     expect(cleanButton).toHaveAttribute("aria-pressed", "false");
     expect(rawButton).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(cleanButton);
+
+    expect(cleanButton).toHaveAttribute("aria-pressed", "true");
+    expect(rawButton).toHaveAttribute("aria-pressed", "false");
     expect(mocks.requestNextQuestion).not.toHaveBeenCalled();
     expect(mocks.createEvaluation).not.toHaveBeenCalled();
     expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
@@ -227,16 +227,19 @@ describe("InterviewScreen の読み上げモード", () => {
     expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
   });
 
-  it("不正なURL値は読み上げないへフォールバックする", async () => {
+  it.each(["", "readAloud=unexpected"])(
+    "欠落・不正な読み上げURL値 %s は読み上げるへフォールバックする",
+    async (readAloudQuery) => {
     mocks.search =
-      "companyId=7&strength=standard&answerMethod=voice&readAloud=unexpected&maxTurns=10";
+      `companyId=7&strength=standard&answerMethod=voice&${readAloudQuery}&maxTurns=10`;
     render(<InterviewScreen mode="interview" />);
 
     await waitFor(() => expect(mocks.getCompany).toHaveBeenCalled());
     expect(
-      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+      screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
     ).toHaveAttribute("aria-pressed", "true");
-  });
+    },
+  );
 
   it("AI返答をログへ追加してから同じ文章全体を1回だけ自動再生する", async () => {
     mocks.synthesizeSpeech.mockImplementation(async (text: string) => {
