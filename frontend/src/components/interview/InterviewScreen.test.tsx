@@ -50,6 +50,7 @@ class FakeAudio {
   static instances: FakeAudio[] = [];
 
   src = "";
+  playbackRate = 1;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
   readonly pause = vi.fn();
@@ -224,6 +225,7 @@ describe("InterviewScreen の読み上げモード", () => {
     );
     expect(FakeAudio.instances).toHaveLength(1);
     expect(FakeAudio.instances[0].src).toBe("blob:question-1");
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.2);
     expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
   });
 
@@ -362,6 +364,7 @@ describe("InterviewScreen の読み上げモード", () => {
 
     await screen.findByRole("button", { name: "停止する" });
     expect(mocks.synthesizeSpeech).toHaveBeenCalledTimes(2);
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.2);
   });
 
   it("自動再生拒否を表示し、手動操作から再試行できる", async () => {
