@@ -286,7 +286,7 @@ audio: <録音した音声 (webm/opus)>
     { "role": "user",      "content": "%えー% 田中と申します。前職では..." }
   ],
   "scores": {
-    "speaking_speed": { "score": 90, "value": 284, "unit": "文字/分" },
+    "speaking_speed": { "score": 92, "value": 284, "unit": "文字/分" },
     "filler":         { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" }
   }
 }
@@ -318,9 +318,9 @@ audio: <録音した音声 (webm/opus)>
   "company_id": 12,
   "status": "completed",
   "created_at": "2026-08-16T14:32:00Z",
-  "total_score": 76,
+  "total_score": 77,
   "scores": {
-    "speaking_speed":    { "score": 90, "value": 284, "unit": "文字/分" },
+    "speaking_speed":    { "score": 92, "value": 284, "unit": "文字/分" },
     "filler":            { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" },
     "structure_content": { "score": 72, "comment": "結論が後半に来る回答が目立つ。具体例は良い" }
   },

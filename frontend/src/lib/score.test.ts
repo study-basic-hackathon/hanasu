@@ -33,7 +33,7 @@ describe("スコア表示の定数", () => {
   it("各レベルの色と話す速さの適正域を提供する", () => {
     expect(SCORE_TEXT_CLASS.good).toBe("text-accent");
     expect(SCORE_BAR_CLASS.improve).toBe("bg-danger");
-    expect(SPEAKING_SPEED_RANGE).toEqual({ min: 200, max: 250 });
+    expect(SPEAKING_SPEED_RANGE).toEqual({ min: 240, max: 260 });
   });
 });
 
@@ -41,8 +41,8 @@ describe("scoreSpeakingSpeed", () => {
   it.each([
     [0, 0],
     [100, 50],
-    [200, 100],
-    [250, 100],
+    [240, 100],
+    [260, 100],
     [350, 70],
     [400, 40],
     [500, 10],
@@ -52,18 +52,22 @@ describe("scoreSpeakingSpeed", () => {
 
   it.each([
     [50, 25],
-    [150, 75],
-    [300, 85],
+    [170, 75],
+    [305, 85],
     [375, 55],
     [450, 25],
-    [101, 51],
   ])("補間区間の %i 文字/分を %i 点にする", (value, expected) => {
     expect(scoreSpeakingSpeed(value)).toBe(expected);
   });
 
+  it("丸め前の実測値で補間し、補間後の0.5を切り上げる", () => {
+    expect(scoreSpeakingSpeed(107)).toBe(53);
+    expect(scoreSpeakingSpeed(264.5)).toBe(99);
+  });
+
   it("満点域と上下限の点数に固定する", () => {
     expect(scoreSpeakingSpeed(-1)).toBe(0);
-    expect(scoreSpeakingSpeed(225)).toBe(100);
+    expect(scoreSpeakingSpeed(250)).toBe(100);
     expect(scoreSpeakingSpeed(600)).toBe(10);
   });
 });

@@ -27,7 +27,7 @@ export const SCORE_BAR_CLASS: Record<ScoreLevel, string> = {
 };
 
 /** 話す速さが100点となる範囲（評価仕様 4.3 / S-14 4.3 / S-12） */
-export const SPEAKING_SPEED_RANGE = { min: 200, max: 250 } as const;
+export const SPEAKING_SPEED_RANGE = { min: 240, max: 260 } as const;
 
 function normalizedScore(score: number): number {
   return Math.min(100, Math.max(0, Math.round(score)));
@@ -54,11 +54,19 @@ export function scoreSpeakingSpeed(charsPerMinute: number): number {
     return interpolateScore(charsPerMinute, [0, 0], [100, 50]);
   }
   if (charsPerMinute < SPEAKING_SPEED_RANGE.min) {
-    return interpolateScore(charsPerMinute, [100, 50], [200, 100]);
+    return interpolateScore(
+      charsPerMinute,
+      [100, 50],
+      [SPEAKING_SPEED_RANGE.min, 100],
+    );
   }
   if (charsPerMinute <= SPEAKING_SPEED_RANGE.max) return 100;
   if (charsPerMinute < 350) {
-    return interpolateScore(charsPerMinute, [250, 100], [350, 70]);
+    return interpolateScore(
+      charsPerMinute,
+      [SPEAKING_SPEED_RANGE.max, 100],
+      [350, 70],
+    );
   }
   if (charsPerMinute < 400) {
     return interpolateScore(charsPerMinute, [350, 70], [400, 40]);

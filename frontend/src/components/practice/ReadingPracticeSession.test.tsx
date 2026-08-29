@@ -58,8 +58,8 @@ const transcription = {
   filler_count: 1,
   filler_count_per_min: 1.5,
   duration_ms: 12_000,
-  chars: 44,
-  chars_per_min: 220,
+  chars: 50,
+  chars_per_min: 250,
 };
 
 describe("ReadingPracticeSession", () => {
@@ -124,7 +124,7 @@ describe("ReadingPracticeSession", () => {
     await act(async () => resolveTranscription(transcription));
 
     expect(screen.getByRole("heading", { name: "今回の評価" })).toBeInTheDocument();
-    expect(screen.getByText("220 文字/分")).toHaveClass("text-accent");
+    expect(screen.getByText("250 文字/分")).toHaveClass("text-accent");
     expect(screen.getByText("1.5 回/分")).toHaveClass("text-accent");
     expect(screen.getByText(/適正な話速です/)).toBeInTheDocument();
     expect(screen.getByText(/保存されません/)).toBeInTheDocument();
@@ -146,7 +146,7 @@ describe("ReadingPracticeSession", () => {
 
     expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
     expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
-    expect(screen.getByText("220 文字/分")).toBeInTheDocument();
+    expect(screen.getByText("250 文字/分")).toBeInTheDocument();
   });
 
   it("文字起こし失敗後に同じ音声を再送できる", async () => {
@@ -166,7 +166,7 @@ describe("ReadingPracticeSession", () => {
     });
 
     expect(mocks.transcribeAudio).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("220 文字/分")).toBeInTheDocument();
+    expect(screen.getByText("250 文字/分")).toBeInTheDocument();
   });
 
   it("マイク権限を拒否されても録音を再試行できる", async () => {
