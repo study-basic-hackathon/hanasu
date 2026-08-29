@@ -24,7 +24,7 @@
 | `03-S-05-practice-setup.png` | S-05 本番モードの設定 | `/practice/setup?mode=interview` |
 | `04-S-06-companies.png` | S-06 応募企業情報 一覧 | `/companies` |
 | `05-S-07-company-new.png` | S-07 新規登録 | `/companies/new` |
-| `06-S-07-company-edit.png` | S-07 編集 | `/companies/[id]/edit` |
+| `06-S-07-company-edit.png` | S-07 編集 | `/companies/edit?id=1` |
 | `07-S-08-interview.png` | S-08 本番モード（待機） | `/interview` |
 | `08-S-08-recording.png` | S-08 本番モード（録音中・無音の経過） | `/interview` |
 | `09-S-03-tutorial.png` | S-03 チュートリアル | `/tutorial` |
@@ -33,9 +33,9 @@
 | `12-S-11-articulation.png` | S-11 滑舌練習 | `/practice/articulation` |
 | `13-S-12-speed.png` | S-12 スピード測定 | `/practice/speed` |
 | `14-S-13-qa.png` | S-13 一問一答評価 | `/practice/qa` |
-| `15-S-14-completed.png` | S-14 評価（完了） | `/evaluations/87` |
-| `16-S-14-processing.png` | S-14 評価（処理中） | `/evaluations/83` |
-| `17-S-14-failed.png` | S-14 評価（失敗） | `/evaluations/81?from=interview` |
+| `15-S-14-completed.png` | S-14 評価（完了） | `/evaluations/detail?id=87` |
+| `16-S-14-processing.png` | S-14 評価（処理中） | `/evaluations/detail?id=83` |
+| `17-S-14-failed.png` | S-14 評価（失敗） | `/evaluations/detail?id=81&from=interview` |
 | `18-S-16-evaluations.png` | S-16 履歴一覧 | `/evaluations` |
 
 ## 動画
