@@ -173,6 +173,35 @@ describe("InterviewScreen の読み上げモード", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("カスタム質問強度を表示し、自然言語の指示を会話APIへ毎ターン送る", async () => {
+    const instruction = "回答の根拠を数値で確認してください";
+    mocks.search =
+      `companyId=7&strength=custom&customQuestionStrength=${encodeURIComponent(instruction)}` +
+      "&answerMethod=text&readAloud=disabled&maxTurns=3";
+    render(<InterviewScreen mode="interview" />);
+
+    expect(screen.getByText("質問の強度：カスタム")).toBeVisible();
+
+    submitAnswer("1つ目の回答です。");
+    await screen.findByText("次の質問です。");
+    submitAnswer("2つ目の回答です。");
+
+    await waitFor(() =>
+      expect(mocks.requestNextQuestion).toHaveBeenCalledTimes(2),
+    );
+    const inputs = mocks.requestNextQuestion.mock.calls.map(([input]) => input);
+    expect(inputs).toEqual([
+      expect.objectContaining({
+        questionStrength: "custom",
+        customQuestionStrength: instruction,
+      }),
+      expect.objectContaining({
+        questionStrength: "custom",
+        customQuestionStrength: instruction,
+      }),
+    ]);
+  });
+
   it("最初の固定質問をログへ表示してから文章全体を1回だけ自動再生する", async () => {
     mocks.search =
       "companyId=7&strength=standard&answerMethod=text&readAloud=enabled&maxTurns=10";

@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.routers import auth
-from app.schemas.interview import ChatRequest, ChatResponse, SttResponse, TtsRequest
+from app.schemas.interview import (
+    ChatRequest,
+    ChatResponse,
+    QuestionStrength,
+    SttResponse,
+    TtsRequest,
+)
 from app.services import llm, stt, tts
 
 router = APIRouter()
@@ -31,14 +37,27 @@ def _read_audio_or_413(audio: UploadFile) -> bytes:
     return bytes(chunks)
 
 
-_INTENSITY_GUIDE = {
-    "楽々": "優しい口調で、基本的な質問を中心にしてください",
-    "標準": "一般的な面接と同じ調子で質問してください",
-    "厳しめ": "回答の曖昧な点や矛盾を深掘りし、鋭く追及してください",
+_QUESTION_STRENGTH_GUIDE = {
+    "easy": "優しい口調で、基本的な質問を中心にしてください",
+    "standard": "一般的な面接と同じ調子で質問してください",
+    "hard": "回答の曖昧な点や矛盾を深掘りし、鋭く追及してください",
 }
 
 
-def _build_system_prompt(company: models.Company, intensity: str, max_turns: int | None, current_turn: int) -> str:
+def _build_system_prompt(
+    company: models.Company,
+    question_strength: QuestionStrength,
+    custom_question_strength: str | None,
+    max_turns: int | None,
+    current_turn: int,
+) -> str:
+    if question_strength == "custom":
+        # ChatRequest の条件付きバリデーションで必須であることを保証している。
+        assert custom_question_strength is not None
+        strength_guide = custom_question_strength
+    else:
+        strength_guide = _QUESTION_STRENGTH_GUIDE[question_strength]
+
     parts = [
         "あなたは採用面接の面接官です。以下の応募情報を踏まえ、応募者への次の質問を1つだけ、日本語で簡潔に返してください。",
         "質問文のみを返し、前置きや解説は書かないでください。",
@@ -48,7 +67,7 @@ def _build_system_prompt(company: models.Company, intensity: str, max_turns: int
         f"# 企業URL: {company.company_url or '（未登録）'}",
         f"# 備考: {company.note or '（未登録）'}",
         *([f"# 募集要項の要約: {company.job_summary}"] if company.job_summary else []),
-        f"# 質問の強度: {intensity}。{_INTENSITY_GUIDE[intensity]}",
+        f"# 質問の強度: {question_strength}。{strength_guide}",
         "会話履歴が空の場合は、自己紹介と志望動機を尋ねる最初の質問をしてください。",
     ]
     if max_turns is not None:
@@ -74,7 +93,13 @@ def chat(
 
     # 1ターン = 質問1つ + 回答1つ。履歴から「いま何ターン目の質問を作るか」を数える
     current_turn = len(chat_in.history) // 2 + 1
-    system = _build_system_prompt(company, chat_in.intensity, chat_in.max_turns, current_turn)
+    system = _build_system_prompt(
+        company,
+        chat_in.question_strength,
+        chat_in.custom_question_strength,
+        chat_in.max_turns,
+        current_turn,
+    )
     history = [t.model_dump() for t in chat_in.history]
     try:
         text = llm.generate_reply(system, history)

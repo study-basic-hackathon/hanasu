@@ -119,6 +119,31 @@ describe("interview-api", () => {
     expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
   });
 
+  it("カスタム質問強度の自然言語を chat API へ送る", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ text: "次の質問です。" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await requestNextQuestion({
+      companyId: 3,
+      questionStrength: "custom",
+      customQuestionStrength: "回答の根拠を数値で確認してください",
+      maxTurns: 10,
+      history: [{ role: "user", content: "回答です。" }],
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      company_id: 3,
+      question_strength: "custom",
+      custom_question_strength: "回答の根拠を数値で確認してください",
+      max_turns: 10,
+      history: [{ role: "user", content: "回答です。" }],
+    });
+  });
+
   it("TTS API の音声レスポンスを Blob で返す", async () => {
     fetchMock.mockResolvedValue(
       new Response(new Blob(["mp3"], { type: "audio/mpeg" }), {
