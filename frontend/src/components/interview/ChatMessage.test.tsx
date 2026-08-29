@@ -104,7 +104,7 @@ describe("ChatMessage の音声回答フィードバック", () => {
       name: "注意",
       charsPerMin: 100,
       fillerCount: 3,
-      fillerCountPerMin: 5,
+      fillerCountPerMin: 9,
       className: "text-warning",
     },
   ])(
@@ -137,7 +137,7 @@ describe("ChatMessage の音声回答フィードバック", () => {
       audio_seconds: 30,
       chars_per_min: 400,
       filler_count: 4,
-      filler_count_per_min: 6,
+      filler_count_per_min: 18,
     });
 
     expect(screen.getByText("400")).toHaveClass("text-danger");

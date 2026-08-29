@@ -134,16 +134,16 @@ describe("buildEvaluationScores", () => {
         {
           role: "user",
           content: "回答",
-          audio_duration_ms: 29_703,
-          filler_count: 2,
+          audio_duration_ms: 11_000,
+          filler_count: 3,
         },
       ]),
     ).toEqual({
       filler: {
-        score: 66,
-        value: 2,
+        score: 15,
+        value: 3,
         unit: "回",
-        value_per_minute: 4,
+        value_per_minute: 16.4,
       },
     });
   });

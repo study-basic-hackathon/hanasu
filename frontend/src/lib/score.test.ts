@@ -75,25 +75,24 @@ describe("scoreSpeakingSpeed", () => {
 describe("scoreFillerRate", () => {
   it.each([
     [0, 100],
-    [2, 100],
-    [5, 50],
-    [10, 20],
-    [15, 0],
+    [5, 100],
+    [10, 50],
+    [15, 20],
+    [20, 0],
   ])("基準点 %i 回/分を %i 点にする", (value, expected) => {
     expect(scoreFillerRate(value)).toBe(expected);
   });
 
   it.each([
-    [3.5, 75],
-    [4, 67],
-    [7.5, 35],
-    [12.5, 10],
+    [7.5, 75],
+    [12.5, 35],
+    [17.5, 10],
   ])("補間区間の %i 回/分を %i 点にする", (value, expected) => {
     expect(scoreFillerRate(value)).toBe(expected);
   });
 
   it("上下限の点数に固定する", () => {
-    expect(scoreFillerRate(1)).toBe(100);
-    expect(scoreFillerRate(20)).toBe(0);
+    expect(scoreFillerRate(3)).toBe(100);
+    expect(scoreFillerRate(25)).toBe(0);
   });
 });
