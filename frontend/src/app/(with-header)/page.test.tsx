@@ -196,6 +196,13 @@ describe("HomePage のフィラー表示", () => {
     expect(mocks.push).toHaveBeenCalledExactlyOnceWith(
       "/tutorial/text?readAloud=disabled",
     );
+    // 遷移の途中で初期値へ戻ったように見せない
+    expect(
+      screen.getByRole("button", { name: "回答方式: 文字入力" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("チュートリアルの確認を取り消すと遷移せず、選択も持ち越さない", async () => {
