@@ -281,12 +281,14 @@ test("主要ページをグローバルナビゲーションで移動できる",
   await expect(
     page.getByRole("heading", { name: "応募企業情報" }),
   ).toBeVisible();
-  const setupNavigation = page.getByRole("link", { name: "練習の設定" });
-  await expect(setupNavigation).toHaveAttribute("href", "/");
-  await setupNavigation.click();
-  await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.getByRole("link", { name: "本番モードを始める" }),
+    page.getByRole("navigation").getByRole("link"),
+  ).toHaveCount(3);
+  await expect(
+    page.getByRole("link", { name: "ホーム", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "履歴", exact: true }),
   ).toBeVisible();
 });
 

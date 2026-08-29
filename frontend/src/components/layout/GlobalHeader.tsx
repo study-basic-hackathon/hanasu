@@ -7,15 +7,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/cn";
 
 /**
- * ナビ4項目（共通仕様 4.1）。
+ * ナビ3項目（共通仕様 4.1）。
  * S-07（/companies/...）は「応募先企業」、S-14（/evaluations/detail）は「履歴」を現在地とする。
- * 「練習の設定」はモード未確定のためホームを開き、S-05 / S-09 へは直接入れない。
  */
 const NAV_ITEMS = [
   { label: "ホーム", href: "/", tracksCurrent: true },
   { label: "応募先企業", href: "/companies", tracksCurrent: true },
   { label: "履歴", href: "/evaluations", tracksCurrent: true },
-  { label: "練習の設定", href: "/", tracksCurrent: false },
 ] as const;
 
 function isCurrent(href: string, pathname: string): boolean {
