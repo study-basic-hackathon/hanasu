@@ -5,12 +5,12 @@ import Link from "next/link";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ScoreValue } from "@/components/ui/ScoreValue";
 import { cn } from "@/lib/cn";
 import type { Evaluation } from "@/lib/domain";
 import { QUESTION_STRENGTH_LABEL } from "@/lib/domain";
 import { formatFiller, formatSpeakingSpeed } from "@/lib/format";
 import {
-  SCORE_TEXT_CLASS,
   SPEAKING_SPEED_RANGE,
   scoreLevel,
   scorePercent,
@@ -246,9 +246,7 @@ function UnmeasuredScoreCard({ label }: { label: string }) {
     <Card className="flex flex-col gap-3.5 p-6">
       <span className="text-label text-ink-sub">{label}</span>
       <div className="flex items-baseline gap-2">
-        <span className="text-score-item leading-none font-bold text-ink-muted">
-          —
-        </span>
+        <ScoreValue score={null} size="lg" />
         <span className="text-label text-ink-muted">計測対象外</span>
       </div>
       <div className="h-2 rounded-control bg-track" />
@@ -276,15 +274,9 @@ function ScoreCard({
   return (
     <Card className="flex flex-col gap-3.5 p-6">
       <span className="text-label text-ink-sub">{label}</span>
+      {/* 点数と実測値は別の要素に分け、点数には単位を付ける（S-14 4.3） */}
       <div className="flex items-baseline gap-2">
-        <span
-          className={cn(
-            "text-score-item leading-none font-bold",
-            SCORE_TEXT_CLASS[level],
-          )}
-        >
-          {score}
-        </span>
+        <ScoreValue score={score} size="lg" />
         <span className="text-label text-ink-muted">{measured}</span>
       </div>
       <div className="h-2 rounded-control bg-track">

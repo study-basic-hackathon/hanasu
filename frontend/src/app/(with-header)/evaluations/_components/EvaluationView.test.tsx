@@ -55,9 +55,38 @@ describe("EvaluationView のフィラー表示", () => {
     const card = fillerCard();
     expect(within(card).getByText("9.0 回/分")).toBeVisible();
     expect(within(card).queryByText("2 回")).not.toBeInTheDocument();
+    expect(card).toHaveTextContent("64 点");
     expect(within(card).getByText("64")).toHaveClass("text-warning");
     expect(scoreBar(card).firstElementChild).toHaveClass("bg-warning");
     expect(scoreBar(card).firstElementChild).toHaveStyle({ width: "64%" });
+  });
+
+  it("点数を単位付きで出し、実測値とは別の要素に分ける", () => {
+    render(
+      <EvaluationView
+        evaluation={completedEvaluation()}
+        fromInterview={false}
+      />,
+    );
+
+    const card = screen.getByText("話の速さ").parentElement;
+    if (!card) throw new Error("話の速さのカードが見つかりません。");
+    expect(card).toHaveTextContent("72 点");
+    expect(within(card).getByText("284 文字/分")).toBeVisible();
+  });
+
+  it("構成・内容は点数の書式を揃え、実測値の代わりに AI 評価と出す", () => {
+    render(
+      <EvaluationView
+        evaluation={completedEvaluation()}
+        fromInterview={false}
+      />,
+    );
+
+    const card = screen.getByText("構成・内容").parentElement;
+    if (!card) throw new Error("構成・内容のカードが見つかりません。");
+    expect(card).toHaveTextContent("75 点");
+    expect(within(card).getByText("AI 評価")).toBeVisible();
   });
 
   it("計測できない場合はスコアと実測値を表示せず、バーの下地だけを残す", () => {
