@@ -14,6 +14,8 @@ type EvaluationListItemResponse = {
   status: Evaluation["status"];
   total_score: number | null;
   company_name: string | null;
+  question_strength?: QuestionStrength | null;
+  turn_count?: number | null;
   scores: EvaluationScores | null;
 };
 
@@ -26,6 +28,8 @@ type EvaluationDetailResponse = Partial<
     Evaluation,
     | "company_id"
     | "company_name"
+    | "question_strength"
+    | "turn_count"
     | "created_at"
     | "total_score"
     | "scores"
@@ -44,9 +48,9 @@ function normalizeEvaluation(
     evaluation_id: response.evaluation_id,
     company_id: "company_id" in response ? (response.company_id ?? null) : null,
     company_name: response.company_name ?? null,
-    question_strength: null,
+    question_strength: response.question_strength ?? null,
     answer_method: null,
-    turn_count: null,
+    turn_count: response.turn_count ?? null,
     status: response.status,
     created_at: response.created_at ?? "",
     total_score: response.total_score ?? null,

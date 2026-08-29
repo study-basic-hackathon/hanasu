@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createEvaluation,
+  getEvaluation,
   listEvaluations,
 } from "@/lib/evaluation-api";
 import { storeAccessToken } from "@/lib/token-storage";
@@ -22,7 +23,7 @@ describe("evaluation-api", () => {
     vi.unstubAllGlobals();
   });
 
-  it("一覧レスポンスにバックエンド未提供の実施条件を null で補う", async () => {
+  it("一覧レスポンスの質問強度とターン数を保持する", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -33,6 +34,8 @@ describe("evaluation-api", () => {
               status: "processing",
               total_score: null,
               company_name: "株式会社テスト",
+              question_strength: "hard",
+              turn_count: 2,
               scores: null,
             },
           ],
@@ -45,12 +48,42 @@ describe("evaluation-api", () => {
       expect.objectContaining({
         evaluation_id: 87,
         company_id: null,
-        question_strength: null,
+        question_strength: "hard",
         answer_method: null,
-        turn_count: null,
+        turn_count: 2,
         advice: [],
       }),
     ]);
+  });
+
+  it("詳細レスポンスの質問強度とターン数を保持する", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          evaluation_id: 88,
+          company_id: 3,
+          company_name: "株式会社テスト",
+          question_strength: "standard",
+          turn_count: 4,
+          status: "completed",
+          created_at: "2026-08-29T12:00:00Z",
+          total_score: 80,
+          scores: {
+            structure_content: { score: 80, comment: "良い回答です" },
+          },
+          advice: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await expect(getEvaluation(88)).resolves.toEqual(
+      expect.objectContaining({
+        evaluation_id: 88,
+        question_strength: "standard",
+        turn_count: 4,
+      }),
+    );
   });
 
   it("評価 API へ未加工 STT テキストと定量スコアを送る", async () => {
