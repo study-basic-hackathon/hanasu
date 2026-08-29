@@ -10,8 +10,8 @@ export const MIN_MAX_TURNS = 1;
 export const DEFAULT_MAX_TURNS = 10;
 export const MAX_MAX_TURNS = 25;
 
-/** 読み上げ設定がURLにない、または不正な場合は自動読み上げを行わない。 */
-export const DEFAULT_READ_ALOUD_MODE: ReadAloudMode = "disabled";
+/** 読み上げ設定がURLにない、または不正な場合の本番モード既定値。 */
+export const DEFAULT_READ_ALOUD_MODE: ReadAloudMode = "enabled";
 
 export function resolveReadAloudMode(value: string | null): ReadAloudMode {
   return value === "enabled" || value === "disabled"

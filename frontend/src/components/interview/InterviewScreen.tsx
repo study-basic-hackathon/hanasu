@@ -134,7 +134,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     configuredReadAloudMode,
   );
   const [transcriptDisplayMode, setTranscriptDisplayMode] =
-    useState<TranscriptDisplayMode>("clean");
+    useState<TranscriptDisplayMode>(() => (isTutorial ? "clean" : "raw"));
   const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);

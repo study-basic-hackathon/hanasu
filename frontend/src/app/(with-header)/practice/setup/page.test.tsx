@@ -61,7 +61,7 @@ describe("PracticeSetupPage", () => {
       screen.queryByRole("button", { name: "練習モード" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "読み上げモード: 読み上げない" }),
+      screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
     ).toHaveAttribute("aria-pressed", "true");
     await selectCompany();
     fireEvent.click(
@@ -74,13 +74,13 @@ describe("PracticeSetupPage", () => {
     expect(dialog).toHaveTextContent("回答方式音声");
     expect(dialog).toHaveTextContent("質問の強度標準");
     expect(dialog).toHaveTextContent("最大ターン数10 ターン");
-    expect(dialog).toHaveTextContent("読み上げモード読み上げない");
+    expect(dialog).toHaveTextContent("読み上げモード読み上げる");
     expect(mocks.push).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "開始する" }));
 
     expect(mocks.push).toHaveBeenCalledWith(
-      "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=disabled&maxTurns=10",
+      "/interview?companyId=7&strength=standard&answerMethod=voice&readAloud=enabled&maxTurns=10",
     );
   });
 

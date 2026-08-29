@@ -69,10 +69,10 @@ describe("読み上げモード", () => {
   });
 
   it.each([null, "", "true", "invalid"])(
-    "URLの欠落・不正値 %s は読み上げないへフォールバックする",
+    "URLの欠落・不正値 %s は読み上げるへフォールバックする",
     (value) => {
-      expect(DEFAULT_READ_ALOUD_MODE).toBe("disabled");
-      expect(resolveReadAloudMode(value)).toBe("disabled");
+      expect(DEFAULT_READ_ALOUD_MODE).toBe("enabled");
+      expect(resolveReadAloudMode(value)).toBe("enabled");
     },
   );
 });
