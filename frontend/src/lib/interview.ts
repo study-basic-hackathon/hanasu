@@ -53,13 +53,16 @@ export function resolveMaxTurns(value: string | null): number {
  */
 
 /** 発話を区切る無音の長さ（秒） */
-export const DEFAULT_SILENCE_SECONDS = 3;
+export const DEFAULT_SILENCE_SECONDS = 2;
 export const MIN_SILENCE_SECONDS = 1;
 export const MAX_SILENCE_SECONDS = 5;
 export const SILENCE_SECONDS_STEP = 0.5;
 
-/** 入力レベルの閾値。平均レベルがこれ未満のあいだを無音とみなす */
-export const DEFAULT_INPUT_THRESHOLD = 8;
+/**
+ * 入力レベルの閾値。平均レベルがこれ未満のあいだを無音とみなす。
+ * 大きいほど環境音を無音として扱い、発話が区切られやすくなる。
+ */
+export const DEFAULT_INPUT_THRESHOLD = 12;
 export const MIN_INPUT_THRESHOLD = 2;
 export const MAX_INPUT_THRESHOLD = 30;
 

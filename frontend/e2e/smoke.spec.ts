@@ -276,7 +276,7 @@ async function mockStt(page: Page) {
  * 常時録音へ1発話ぶん話しかける。
  * 声を出してから黙り、無音の長さぶん待つと発話が確定して送られる。
  */
-async function speakAnswer(page: Page, silenceMs = 3_400) {
+async function speakAnswer(page: Page, silenceMs = 2_400) {
   await page.evaluate(() => {
     (window as unknown as { __inputLevel: number }).__inputLevel = 40;
   });
@@ -793,12 +793,12 @@ test("音声の設定で無音の長さを変えると、その長さで発話�
   await expect(page.getByText("どうぞお話しください")).toBeVisible();
   await page.getByRole("button", { name: "音声の設定" }).click();
   const silence = page.getByLabel("無音の長さ");
-  await expect(silence).toHaveValue("3");
+  await expect(silence).toHaveValue("2");
   await silence.fill("1");
   await expect(page.getByText("1.0 秒")).toBeVisible();
   await page.getByRole("button", { name: "音声の設定を閉じる" }).click();
 
-  // 1秒に縮めたので、3秒待たずに発話が確定する
+  // 1秒に縮めたので、既定の2秒を待たずに発話が確定する
   await speakAnswer(page, 1_400);
 
   await expect(page.getByText("次の質問です。")).toBeVisible();

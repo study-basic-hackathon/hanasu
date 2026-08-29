@@ -34,7 +34,7 @@ describe("面接進行の定数", () => {
     expect(DEFAULT_MAX_TURNS).toBe(10);
     expect(MAX_MAX_TURNS).toBe(25);
     expect(TUTORIAL_MAX_TURNS).toBe(1);
-    expect(DEFAULT_SILENCE_SECONDS).toBe(3);
+    expect(DEFAULT_SILENCE_SECONDS).toBe(2);
     expect(RECORDING_MIN_SECONDS).toBe(1);
     expect(RECORDING_MAX_SECONDS).toBe(180);
     expect(FIRST_QUESTION).toContain("自己紹介");

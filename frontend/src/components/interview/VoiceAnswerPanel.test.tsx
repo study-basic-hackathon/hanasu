@@ -166,7 +166,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
   }
 
   /** 話してから黙る。既定では区切りに届くまで黙る */
-  async function speakThenPause(speakMs = 1_500, silenceMs = 3_100) {
+  async function speakThenPause(speakMs = 1_500, silenceMs = 2_100) {
     inputLevel = 40;
     await advance(speakMs);
     inputLevel = 0;
@@ -205,7 +205,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
     expect(screen.getByText("聞き取り中…")).toBeInTheDocument();
 
     inputLevel = 0;
-    await advance(1_200);
+    await advance(700);
     expect(screen.getByText(/^あと 1\.\d 秒で送ります$/)).toBeInTheDocument();
   });
 
@@ -286,7 +286,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
     const onSubmit = vi.fn();
     await renderPanel({ onSubmit });
 
-    await speakThenPause(400, 3_100);
+    await speakThenPause(400, 2_100);
 
     expect(mocks.transcribeAudio).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
