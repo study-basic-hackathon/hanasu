@@ -18,6 +18,7 @@ import type {
 } from "@/lib/domain";
 import {
   ANSWER_METHOD_LABEL,
+  CUSTOM_QUESTION_STRENGTH_MAX_LENGTH,
   QUESTION_STRENGTH_LABEL,
   READ_ALOUD_MODE_LABEL,
 } from "@/lib/domain";
@@ -31,7 +32,12 @@ import {
 
 type Mode = "interview" | "practice";
 
-const STRENGTHS: QuestionStrength[] = ["easy", "standard", "hard"];
+const STRENGTHS: QuestionStrength[] = [
+  "easy",
+  "standard",
+  "hard",
+  "custom",
+];
 const ANSWER_METHODS: AnswerMethod[] = ["voice", "text"];
 const READ_ALOUD_MODES: ReadAloudMode[] = ["enabled", "disabled"];
 
@@ -80,6 +86,7 @@ function PracticeSetupContent() {
     DEFAULT_READ_ALOUD_MODE,
   );
   const [strength, setStrength] = useState<QuestionStrength>("standard");
+  const [customQuestionStrength, setCustomQuestionStrength] = useState("");
   const [maxTurnsInput, setMaxTurnsInput] = useState(
     String(DEFAULT_MAX_TURNS),
   );
@@ -126,13 +133,40 @@ function PracticeSetupContent() {
     maxTurns === null
       ? `最大ターン数は${MIN_MAX_TURNS}〜${MAX_MAX_TURNS}の整数で入力してください。`
       : null;
+  const customQuestionStrengthLength = Array.from(
+    customQuestionStrength.trim(),
+  ).length;
+  const customQuestionStrengthError =
+    strength !== "custom"
+      ? null
+      : customQuestionStrengthLength === 0
+        ? "カスタムの質問強度を入力してください。"
+        : customQuestionStrengthLength > CUSTOM_QUESTION_STRENGTH_MAX_LENGTH
+          ? `カスタムの質問強度は${CUSTOM_QUESTION_STRENGTH_MAX_LENGTH}文字以内で入力してください。`
+          : null;
   // 本番モードは対象企業が1つ選ばれていることが条件。練習モードは条件なし（S-05 5章）
   const canStart =
-    isPracticeMode || (companyId !== null && maxTurns !== null);
+    customQuestionStrengthError === null &&
+    (isPracticeMode || (companyId !== null && maxTurns !== null));
   const selectedCompany = companies.find((company) => company.id === companyId);
+  const confirmationItems: [string, string][] = [
+    ["対象企業", selectedCompany?.company_name ?? "—"],
+    ["回答方式", ANSWER_METHOD_LABEL[answerMethod]],
+    ["質問の強度", QUESTION_STRENGTH_LABEL[strength]],
+    ...(strength === "custom"
+      ? [["カスタムの指示", customQuestionStrength.trim()] as [string, string]]
+      : []),
+    ["最大ターン数", `${maxTurns ?? "—"} ターン`],
+    ["読み上げモード", READ_ALOUD_MODE_LABEL[readAloudMode]],
+  ];
 
   function startInterview() {
-    if (companyId === null || maxTurns === null) return;
+    if (
+      companyId === null ||
+      maxTurns === null ||
+      customQuestionStrengthError !== null
+    )
+      return;
     const params = new URLSearchParams({
       companyId: String(companyId),
       strength,
@@ -140,6 +174,9 @@ function PracticeSetupContent() {
       readAloud: readAloudMode,
       maxTurns: String(maxTurns),
     });
+    if (strength === "custom") {
+      params.set("customQuestionStrength", customQuestionStrength.trim());
+    }
     setConfirmingStart(false);
     router.push(`/interview?${params.toString()}`);
   }
@@ -196,7 +233,7 @@ function PracticeSetupContent() {
 
         <Card className="flex flex-col gap-3.5 px-[26px] py-6">
           <h2 className="text-card-sm font-bold">質問の強度</h2>
-          <div className="flex gap-2.5">
+          <div className="grid grid-cols-4 gap-2.5">
             {STRENGTHS.map((value) => (
               <button
                 key={value}
@@ -214,6 +251,57 @@ function PracticeSetupContent() {
               </button>
             ))}
           </div>
+          {strength === "custom" && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="custom-question-strength"
+                className="text-label font-medium text-ink-label"
+              >
+                カスタムの質問強度
+              </label>
+              <textarea
+                id="custom-question-strength"
+                aria-invalid={customQuestionStrengthError ? true : undefined}
+                aria-describedby={
+                  customQuestionStrengthError
+                    ? "custom-question-strength-error custom-question-strength-count"
+                    : "custom-question-strength-count"
+                }
+                value={customQuestionStrength}
+                onChange={(event) =>
+                  setCustomQuestionStrength(event.target.value)
+                }
+                placeholder="例：回答の根拠を数値で確認し、曖昧な点を深掘りしてください"
+                rows={3}
+                className={cn(
+                  "w-full resize-y rounded-control border bg-surface px-3 py-2 text-body-sm outline-none focus:border-accent",
+                  customQuestionStrengthError
+                    ? "border-danger"
+                    : "border-line-strong",
+                )}
+              />
+              <div className="flex items-start justify-between gap-3">
+                {customQuestionStrengthError ? (
+                  <p
+                    id="custom-question-strength-error"
+                    role="alert"
+                    className="text-note text-danger"
+                  >
+                    {customQuestionStrengthError}
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <p
+                  id="custom-question-strength-count"
+                  className="flex-none text-note text-ink-muted"
+                >
+                  {customQuestionStrengthLength}/
+                  {CUSTOM_QUESTION_STRENGTH_MAX_LENGTH}文字
+                </p>
+              </div>
+            </div>
+          )}
           <p className="text-note leading-[1.7] text-ink-muted">
             深掘りの度合いが変わります。強度は毎ターン面接官に伝わります。
           </p>
@@ -403,7 +491,12 @@ function PracticeSetupContent() {
                 router.push("/practice");
                 return;
               }
-              if (companyId === null || maxTurns === null) return;
+              if (
+                companyId === null ||
+                maxTurns === null ||
+                customQuestionStrengthError !== null
+              )
+                return;
               setConfirmingStart(true);
             }}
             className="px-[34px]"
@@ -423,13 +516,7 @@ function PracticeSetupContent() {
               この設定で本番モードを開始しますか？
             </h2>
             <dl className="divide-y divide-divider rounded-control border border-line">
-              {[
-                ["対象企業", selectedCompany?.company_name ?? "—"],
-                ["回答方式", ANSWER_METHOD_LABEL[answerMethod]],
-                ["質問の強度", QUESTION_STRENGTH_LABEL[strength]],
-                ["最大ターン数", `${maxTurns ?? "—"} ターン`],
-                ["読み上げモード", READ_ALOUD_MODE_LABEL[readAloudMode]],
-              ].map(([label, value]) => (
+              {confirmationItems.map(([label, value]) => (
                 <div
                   key={label}
                   className="grid grid-cols-[120px_1fr] gap-3 px-4 py-2.5"

@@ -377,6 +377,62 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
 });
 
+test("カスタム質問強度を設定から引き継ぎ、会話APIへ毎ターン送る", async ({
+  page,
+}) => {
+  const instruction = "回答の根拠を数値で確認してください";
+  let chatRequestCount = 0;
+  await page.route("http://localhost:8000/interviews/chat", async (route) => {
+    chatRequestCount += 1;
+    const body = route.request().postDataJSON();
+    expect(body).toMatchObject({
+      company_id: 1,
+      question_strength: "custom",
+      custom_question_strength: instruction,
+      max_turns: 10,
+    });
+    return fulfillJson(route, { text: `カスタム質問${chatRequestCount}です。` });
+  });
+
+  await page.goto("/practice/setup?mode=interview");
+  await page.getByRole("button", { name: "カスタム" }).click();
+  const customInput = page.getByRole("textbox", {
+    name: "カスタムの質問強度",
+  });
+  await expect(customInput).toBeVisible();
+  await expect(
+    page.getByText("カスタムの質問強度を入力してください。"),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: company.company_name }).click();
+  await customInput.fill("指".repeat(501));
+  await expect(page.getByText("501/500文字")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "本番モードを始める" }),
+  ).toBeDisabled();
+
+  await customInput.fill(`  ${instruction}  `);
+  await page.getByRole("button", { name: "文字入力" }).click();
+  await page.getByRole("button", { name: "本番モードを始める" }).click();
+  const startDialog = page.getByRole("dialog");
+  await expect(startDialog).toContainText(/質問の強度\s*カスタム/);
+  await expect(startDialog).toContainText(
+    new RegExp(`カスタムの指示\\s*${instruction}`),
+  );
+  await startDialog.getByRole("button", { name: "開始する" }).click();
+
+  await expect(page).toHaveURL(/strength=custom/);
+  await expect(page.getByText("質問の強度：カスタム")).toBeVisible();
+
+  await page.getByPlaceholder("回答を入力してください").fill("1つ目の回答です。");
+  await page.getByRole("button", { name: "送信する" }).click();
+  await expect(page.getByText("カスタム質問1です。")).toBeVisible();
+  await page.getByPlaceholder("回答を入力してください").fill("2つ目の回答です。");
+  await page.getByRole("button", { name: "送信する" }).click();
+  await expect(page.getByText("カスタム質問2です。")).toBeVisible();
+  expect(chatRequestCount).toBe(2);
+});
+
 test("評価の再挑戦は本番設定、モード未確定の履歴0件導線はホームを開く", async ({
   page,
 }) => {

@@ -1,11 +1,14 @@
 /** フロントエンドで共有する業務データの型。API と画面の境界で利用する。 */
 
-export type QuestionStrength = "easy" | "standard" | "hard";
+export type QuestionStrength = "easy" | "standard" | "hard" | "custom";
+
+export const CUSTOM_QUESTION_STRENGTH_MAX_LENGTH = 500;
 
 export const QUESTION_STRENGTH_LABEL: Record<QuestionStrength, string> = {
   easy: "楽々",
   standard: "標準",
   hard: "厳しめ",
+  custom: "カスタム",
 };
 
 export type AnswerMethod = "voice" | "text";

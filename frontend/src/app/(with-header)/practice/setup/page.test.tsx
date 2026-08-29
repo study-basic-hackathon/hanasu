@@ -130,6 +130,70 @@ describe("PracticeSetupPage", () => {
     );
   });
 
+  it("カスタム選択時だけ自然言語を必須・500文字で検証し、保持して面接へ渡す", async () => {
+    const instruction = "回答の根拠を数値で確認してください";
+    const enteredInstruction = `  ${instruction}  `;
+    render(<PracticeSetupPage />);
+
+    expect(
+      screen.queryByRole("textbox", { name: "カスタムの質問強度" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "カスタム" }));
+    const input = screen.getByRole("textbox", {
+      name: "カスタムの質問強度",
+    });
+    expect(input).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "カスタムの質問強度を入力してください。",
+    );
+
+    await selectCompany();
+    expect(
+      screen.getByRole("button", { name: "本番モードを始める" }),
+    ).toBeDisabled();
+
+    fireEvent.change(input, { target: { value: "指".repeat(501) } });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "カスタムの質問強度は500文字以内で入力してください。",
+    );
+    expect(screen.getByText("501/500文字")).toBeVisible();
+
+    fireEvent.change(input, { target: { value: enteredInstruction } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(`${instruction.length}/500文字`)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "本番モードを始める" }),
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "標準" }));
+    expect(
+      screen.queryByRole("textbox", { name: "カスタムの質問強度" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "カスタム" }));
+    expect(
+      screen.getByRole("textbox", { name: "カスタムの質問強度" }),
+    ).toHaveValue(enteredInstruction);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "本番モードを始める" }),
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("質問の強度カスタム");
+    expect(dialog).toHaveTextContent(`カスタムの指示${instruction}`);
+    fireEvent.click(screen.getByRole("button", { name: "開始する" }));
+
+    const destination = new URL(
+      String(mocks.push.mock.calls[0][0]),
+      "http://localhost",
+    );
+    expect(destination.pathname).toBe("/interview");
+    expect(destination.searchParams.get("strength")).toBe("custom");
+    expect(destination.searchParams.get("customQuestionStrength")).toBe(
+      instruction,
+    );
+  });
+
   it("募集要項の要約を登録済み情報として表示する", async () => {
     mocks.listCompanies.mockResolvedValue([
       { ...company, motivation: null, job_summary: "募集要項の要約" },

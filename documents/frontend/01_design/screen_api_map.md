@@ -70,7 +70,7 @@
 
 ### 呼び出しの要点
 
-- **`POST /interviews/chat` には、企業ID・質問の強度・会話履歴を毎ターン送る。** サーバーが会話状態を持たないため
+- **`POST /interviews/chat` には、企業ID・質問の強度・会話履歴を毎ターン送る。** カスタム選択時は自然言語の質問強度も毎ターン添える。サーバーが会話状態を持たないため
 - **`POST /interviews/stt` は毎ターン呼ばれるとは限らない。** 文字入力のターンは STT を経由せず `chat` に直接届く
 - **合否の目安は API から返らない。** S-14 が総合スコアから判定する（当面はハードコード）
 - **全 API に `Authorization: Bearer <access_token>` を付ける。** トークンが無効なら S-01 へ戻す（挙動の定義は [#9](https://github.com/study-basic-hackathon/hanasu/issues/9) の共通仕様）

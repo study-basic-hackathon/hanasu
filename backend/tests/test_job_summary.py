@@ -228,7 +228,7 @@ class JobSummaryApiTest(unittest.TestCase):
                 "/interviews/chat",
                 json={
                     "company_id": created["id"],
-                    "intensity": "標準",
+                    "question_strength": "standard",
                     "history": [],
                 },
             )
@@ -249,7 +249,7 @@ class JobSummaryApiTest(unittest.TestCase):
                 "/interviews/chat",
                 json={
                     "company_id": created["id"],
-                    "intensity": "標準",
+                    "question_strength": "standard",
                     "history": [],
                 },
             )

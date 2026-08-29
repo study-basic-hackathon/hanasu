@@ -30,6 +30,7 @@ import { buildEvaluationScores } from "@/lib/evaluation-score";
 import { storeEvaluationSession } from "@/lib/evaluation-session";
 import {
   ANSWER_METHOD_LABEL,
+  CUSTOM_QUESTION_STRENGTH_MAX_LENGTH,
   QUESTION_STRENGTH_LABEL,
   READ_ALOUD_MODE_LABEL,
   TRANSCRIPT_DISPLAY_MODE_LABEL,
@@ -63,8 +64,19 @@ type ExitAction = "interrupt" | "home";
 const IDLE_SPEECH_STATE: SpeechState = { turnIndex: null, status: "idle" };
 
 function questionStrengthOf(value: string | null): QuestionStrength | null {
-  return value === "easy" || value === "standard" || value === "hard"
+  return value === "easy" ||
+    value === "standard" ||
+    value === "hard" ||
+    value === "custom"
     ? value
+    : null;
+}
+
+function customQuestionStrengthOf(value: string | null): string | null {
+  const trimmed = value?.trim() ?? "";
+  const length = Array.from(trimmed).length;
+  return length >= 1 && length <= CUSTOM_QUESTION_STRENGTH_MAX_LENGTH
+    ? trimmed
     : null;
 }
 
@@ -89,8 +101,21 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     !isTutorial && Number.isSafeInteger(configuredCompanyId) && configuredCompanyId > 0
       ? configuredCompanyId
       : null;
+  const configuredQuestionStrength = questionStrengthOf(
+    searchParams.get("strength"),
+  );
+  const configuredCustomQuestionStrength = customQuestionStrengthOf(
+    searchParams.get("customQuestionStrength"),
+  );
   const questionStrength =
-    questionStrengthOf(searchParams.get("strength")) ?? "standard";
+    configuredQuestionStrength === "custom" &&
+    configuredCustomQuestionStrength === null
+      ? "standard"
+      : (configuredQuestionStrength ?? "standard");
+  const customQuestionStrength =
+    questionStrength === "custom"
+      ? (configuredCustomQuestionStrength ?? undefined)
+      : undefined;
   const configuredAnswerMethod =
     answerMethodOf(searchParams.get("answerMethod")) ?? "voice";
   const configuredReadAloudMode = resolveReadAloudMode(
@@ -410,6 +435,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
         {
           companyId,
           questionStrength,
+          customQuestionStrength,
           maxTurns,
           history: nextTurns,
         },
@@ -438,6 +464,7 @@ export function InterviewScreen({ mode }: { mode: InterviewMode }) {
     [
       answeredTurns,
       companyId,
+      customQuestionStrength,
       maxTurns,
       questionStrength,
       turns,

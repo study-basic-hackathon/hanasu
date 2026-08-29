@@ -42,6 +42,7 @@ export async function requestNextQuestion(
   input: {
     companyId: number;
     questionStrength: QuestionStrength;
+    customQuestionStrength?: string;
     maxTurns: number;
     history: ChatTurn[];
   },
@@ -53,6 +54,9 @@ export async function requestNextQuestion(
     body: JSON.stringify({
       company_id: input.companyId,
       question_strength: input.questionStrength,
+      ...(input.questionStrength === "custom"
+        ? { custom_question_strength: input.customQuestionStrength }
+        : {}),
       max_turns: input.maxTurns,
       history: input.history.map((turn) => ({
         role: turn.role,
