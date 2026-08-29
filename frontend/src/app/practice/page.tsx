@@ -20,7 +20,7 @@ const PRACTICE_ITEMS = [
   {
     screenId: "S-13",
     name: "一問一答評価",
-    description: "志望動機など単一の質問に答え、内容を評価します。",
+    description: "志望動機など単一の質問に答え、話し方を確認します。",
     href: "/practice/qa",
   },
 ];
