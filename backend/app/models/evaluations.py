@@ -18,6 +18,10 @@ class Evaluation(Base):
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True)
     # 登録時の企業名の写し。企業の削除・改名後も履歴にその時点の名前を出すために持つ
     company_name = Column(String, nullable=True)
+    # 面接で選択した質問強度。チュートリアルと既存の評価結果は NULL
+    question_strength = Column(String, nullable=True)
+    # 評価時点で実施した回答数。既存の評価結果は NULL
+    turn_count = Column(Integer, nullable=True)
     # 評価の状態（processing / completed / failed）。クライアントは completed までポーリングする
     status = Column(String, nullable=False)
     # 総合スコア（completed になるまで NULL）

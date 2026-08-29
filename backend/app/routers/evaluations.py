@@ -66,6 +66,8 @@ def create_evaluation(
     evaluation = models.Evaluation(
         company_id=eval_in.company_id,
         company_name=company_name,
+        question_strength=eval_in.question_strength,
+        turn_count=eval_in.turn_count,
         status="processing",
         scores=eval_in.scores,
     )
@@ -107,14 +109,24 @@ def get_evaluation(
     if ev is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="評価結果が見つかりません")
 
-    if ev.status == "processing":
-        return {"evaluation_id": ev.evaluation_id, "status": ev.status}
-    if ev.status == "failed":
-        return {"evaluation_id": ev.evaluation_id, "status": ev.status, "error": ev.error}
-    return {
-        "evaluation_id": ev.evaluation_id,
+    metadata = {
         "company_id": ev.company_id,
         "company_name": ev.company_name,
+        "question_strength": ev.question_strength,
+        "turn_count": ev.turn_count,
+    }
+    if ev.status == "processing":
+        return {"evaluation_id": ev.evaluation_id, "status": ev.status, **metadata}
+    if ev.status == "failed":
+        return {
+            "evaluation_id": ev.evaluation_id,
+            "status": ev.status,
+            "error": ev.error,
+            **metadata,
+        }
+    return {
+        "evaluation_id": ev.evaluation_id,
+        **metadata,
         "status": ev.status,
         "created_at": ev.created_at,
         "total_score": ev.total_score,
