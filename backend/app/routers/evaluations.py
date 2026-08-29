@@ -11,6 +11,27 @@ from app.services import llm
 
 router = APIRouter()
 
+# 構成・内容60% / フィラー20% / 話す速さ20%（3:1:1）。整数比で持ち、四捨五入を整数演算で行う
+_TOTAL_SCORE_WEIGHTS: dict[str, int] = {
+    "structure_content": 3,
+    "filler": 1,
+    "speaking_speed": 1,
+}
+
+
+def _calculate_total_score(scores: dict) -> int | None:
+    """存在する基本項目だけの加重平均を四捨五入する（0.5は切り上げ、欠測項目の重みで正規化）。"""
+    weighted_sum = 0
+    weight_total = 0
+    for key, weight in _TOTAL_SCORE_WEIGHTS.items():
+        value = scores.get(key)
+        if isinstance(value, dict) and isinstance(value.get("score"), int):
+            weighted_sum += value["score"] * weight
+            weight_total += weight
+    if weight_total == 0:
+        return None
+    return (weighted_sum * 2 + weight_total) // (weight_total * 2)
+
 
 def _run_evaluation(evaluation_id: int, company_name: str | None, turns: list[dict]) -> None:
     """バックグラウンドで定性評価（LLM）を実行し、completed / failed にする。
@@ -30,13 +51,9 @@ def _run_evaluation(evaluation_id: int, company_name: str | None, turns: list[di
                 "score": qualitative.get("score"),
                 "comment": qualitative.get("comment"),
             }
-            nums = [
-                v["score"] for v in scores.values()
-                if isinstance(v, dict) and isinstance(v.get("score"), int)
-            ]
             ev.scores = scores  # JSON カラムは再代入で変更を検知させる
             ev.advice = qualitative.get("advice") or []
-            ev.total_score = round(sum(nums) / len(nums)) if nums else None
+            ev.total_score = _calculate_total_score(scores)
             ev.status = "completed"
         except Exception as e:
             ev.error = str(e)
