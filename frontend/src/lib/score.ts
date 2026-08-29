@@ -79,15 +79,15 @@ export function scoreSpeakingSpeed(charsPerMinute: number): number {
 
 /** 評価仕様 4.2 の基準点間を線形補間して毎分フィラー数を点数化する。 */
 export function scoreFillerRate(fillersPerMinute: number): number {
-  if (fillersPerMinute <= 2) return 100;
-  if (fillersPerMinute < 5) {
-    return interpolateScore(fillersPerMinute, [2, 100], [5, 50]);
-  }
+  if (fillersPerMinute <= 5) return 100;
   if (fillersPerMinute < 10) {
-    return interpolateScore(fillersPerMinute, [5, 50], [10, 20]);
+    return interpolateScore(fillersPerMinute, [5, 100], [10, 50]);
   }
   if (fillersPerMinute < 15) {
-    return interpolateScore(fillersPerMinute, [10, 20], [15, 0]);
+    return interpolateScore(fillersPerMinute, [10, 50], [15, 20]);
+  }
+  if (fillersPerMinute < 20) {
+    return interpolateScore(fillersPerMinute, [15, 20], [20, 0]);
   }
   return 0;
 }
