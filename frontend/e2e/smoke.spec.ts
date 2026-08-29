@@ -291,6 +291,29 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
 
+test("S-13で音声回答の話速とフィラーを一時表示できる", async ({ page }) => {
+  await installFakeRecorder(page);
+  const sttRequests = await mockStt(page);
+
+  await page.goto("/practice/qa");
+  await expect(page.getByText("なぜ当社を志望されたのですか。")).toBeVisible();
+
+  await page.getByRole("button", { name: "回答の録音を開始する" }).click();
+  await page.waitForTimeout(1_000);
+  await page.getByRole("button", { name: "録音を停止する" }).click();
+
+  await expect(page.getByRole("heading", { name: "今回の評価" })).toBeVisible();
+  await expect(page.getByText("150 文字/分")).toBeVisible();
+  await expect(page.getByText("30.0 回/分")).toBeVisible();
+  await expect(page.getByText(/保存されません/)).toBeVisible();
+  expect(sttRequests()).toBe(1);
+
+  await page.getByRole("button", { name: "もう一度回答する" }).click();
+  await expect(
+    page.getByRole("button", { name: "回答の録音を開始する" }),
+  ).toBeVisible();
+});
+
 test("主要ページをグローバルナビゲーションで移動できる", async ({ page }) => {
   await page.goto("/");
 
@@ -309,12 +332,14 @@ test("主要ページをグローバルナビゲーションで移動できる",
   await expect(
     page.getByRole("heading", { name: "応募企業情報" }),
   ).toBeVisible();
-  const setupNavigation = page.getByRole("link", { name: "練習の設定" });
-  await expect(setupNavigation).toHaveAttribute("href", "/");
-  await setupNavigation.click();
-  await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.getByRole("link", { name: "本番モードを始める" }),
+    page.getByRole("navigation").getByRole("link"),
+  ).toHaveCount(3);
+  await expect(
+    page.getByRole("link", { name: "ホーム", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "履歴", exact: true }),
   ).toBeVisible();
 });
 
