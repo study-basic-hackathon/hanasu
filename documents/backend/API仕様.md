@@ -281,6 +281,8 @@ audio: <録音した音声 (webm/opus)>
 // リクエスト
 {
   "company_id": 12,
+  "question_strength": "standard",
+  "turn_count": 1,
   "turns": [
     { "role": "assistant", "content": "まず自己紹介をお願いします" },
     { "role": "user",      "content": "%えー% 田中と申します。前職では..." }
@@ -297,7 +299,9 @@ audio: <録音した音声 (webm/opus)>
 { "evaluation_id": 87 }
 ```
 
-- **`company_id` はチュートリアルでは省略する**（評価結果テーブルの企業IDは NULL を許す）
+- **`company_id` はチュートリアルでは省略する**（評価結果テーブルの企業IDは NULL を許す）。このとき `question_strength` は `null` とする
+- **`question_strength` は本番面接では `easy` / `standard` / `hard` / `custom` のいずれか、チュートリアルでは `null` を送る。** カスタム質問強度の自由文は評価結果に保存しない
+- **`turn_count` は `turns` に含まれる `role: "user"` の回答数を送る。** サーバーは回答数と一致する値だけを保存する
 - **`turns` は `role` / `content` のみ。** 定量指標は含めない
 - **定量はコード、定性は LLM**（[ADR-0009](../ADR/0009-評価方式.md)）。`scores` は**クライアントが算出済みのものを受け取り、DB に保存するだけで LLM には渡さない**
 - **定量スコアの計算規則は [評価仕様](../評価仕様.md) が正本。** 指標を計測できる音声回答がない場合は、`speaking_speed` または `filler` を `scores` から省略する。0点として送らない
@@ -308,7 +312,14 @@ audio: <録音した音声 (webm/opus)>
 
 ```json
 // 処理中
-{ "evaluation_id": 87, "status": "processing" }
+{
+  "evaluation_id": 87,
+  "status": "processing",
+  "company_id": 12,
+  "company_name": "株式会社テスト",
+  "question_strength": "standard",
+  "turn_count": 1
+}
 ```
 
 ```json
@@ -316,6 +327,9 @@ audio: <録音した音声 (webm/opus)>
 {
   "evaluation_id": 87,
   "company_id": 12,
+  "company_name": "株式会社テスト",
+  "question_strength": "standard",
+  "turn_count": 1,
   "status": "completed",
   "created_at": "2026-08-16T14:32:00Z",
   "total_score": 77,
@@ -330,7 +344,15 @@ audio: <録音した音声 (webm/opus)>
 
 ```json
 // 失敗
-{ "evaluation_id": 87, "status": "failed", "error": "LLM 呼び出しに失敗しました" }
+{
+  "evaluation_id": 87,
+  "status": "failed",
+  "error": "LLM 呼び出しに失敗しました",
+  "company_id": 12,
+  "company_name": "株式会社テスト",
+  "question_strength": "standard",
+  "turn_count": 1
+}
 ```
 
 - **状態は `processing` / `completed` / `failed` の3つ。** `completed` になるまでクライアントがポーリングする。**`failed` がないと、LLM が落ちたときフロントが永久にポーリングし続ける**
@@ -338,6 +360,7 @@ audio: <録音した音声 (webm/opus)>
 - **`total_score` はバックエンドが算出する。** `speaking_speed` / `filler` / `structure_content` のうち存在するスコアを等価平均して四捨五入し、任意の `pause` は含めない（[評価仕様](../評価仕様.md) 5章）
 - **合否の目安は返さない。** クライアントが `total_score` から判定する
 - **評価履歴からの詳細表示もこの API を使う**
+- **すべての状態で `company_id`、`company_name`、`question_strength`、`turn_count` を返す。** 既存評価結果は追加項目を `null` として返す
 
 ### 5.7 `GET /evaluations` — 評価履歴の一覧
 
@@ -345,14 +368,27 @@ audio: <録音した音声 (webm/opus)>
 // レスポンス
 {
   "evaluations": [
-    { "evaluation_id": 87, "created_at": "2026-08-16T14:32:00Z", "status": "completed", "total_score": 76 },
-    { "evaluation_id": 64, "created_at": "2026-08-14T10:05:00Z", "status": "completed", "total_score": 65 }
+    {
+      "evaluation_id": 87,
+      "created_at": "2026-08-16T14:32:00Z",
+      "status": "completed",
+      "total_score": 76,
+      "company_name": "株式会社テスト",
+      "question_strength": "standard",
+      "turn_count": 8,
+      "scores": {
+        "speaking_speed": { "score": 92, "value": 284, "unit": "文字/分" },
+        "filler": { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" },
+        "structure_content": { "score": 72, "comment": "結論が後半に来る回答が目立つ。具体例は良い" }
+      }
+    }
   ]
 }
 ```
 
 - **企業では絞り込まず、全件を返す。** **企業IDを持たないチュートリアルの結果も同じ一覧に含まれる**
 - 一覧に `evaluation_id` を含めることで、一覧 → 詳細（5.6）の導線がつながる
+- 一覧は `company_name`、`question_strength`、`turn_count`、項目別 `scores` を返す。既存評価結果の追加項目は `null` とする
 
 ### 5.8 評価する指標
 
@@ -375,7 +411,7 @@ audio: <録音した音声 (webm/opus)>
 |---|---|---|
 | `users` | `id` (PK) / `username` / `password_hash` | 固定アカウント1つ |
 | `companies`（応募情報） | `id` (PK) / `company_name` / `company_url` / `motivation` / `resume` / `note` / `job_summary` / `created_at` | 企業情報 + 志望動機 + 経歴を1レコードで持つ。`company_name` は一意 |
-| `evaluations`（評価結果） | `evaluation_id` (PK) / `company_id` (FK + INDEX) / `status` / `total_score` / `scores` (JSON) / `advice` (JSON) / `created_at` | `status` は `processing` / `completed` / `failed` |
+| `evaluations`（評価結果） | `evaluation_id` (PK) / `company_id` (FK + INDEX) / `company_name` / `question_strength` / `turn_count` / `status` / `total_score` / `scores` (JSON) / `advice` (JSON) / `created_at` | `question_strength` はチュートリアル・既存評価結果で NULL。`turn_count` は実施した回答数で、既存評価結果は NULL。`status` は `processing` / `completed` / `failed` |
 
 - **`evaluations` の PK は `evaluation_id` 単体。** `GET /evaluations/{evaluation_id}` で引く以上、これ単体で一意に特定できる必要がある
 - **`evaluations.company_id` は NULL を許す**（チュートリアルの評価は応募情報を持たないため）
