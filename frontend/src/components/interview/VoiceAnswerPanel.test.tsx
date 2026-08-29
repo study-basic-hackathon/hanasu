@@ -243,6 +243,27 @@ describe("VoiceAnswerPanel の常時録音", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("「次の質問へ」で無音を待たずに送り、話す前は押せない", async () => {
+    const onSubmit = vi.fn();
+    await renderPanel({ onSubmit });
+
+    const nextButton = screen.getByRole("button", { name: "次の質問へ" });
+    expect(nextButton).toBeDisabled();
+
+    inputLevel = 40;
+    await advance(1_500);
+    expect(nextButton).toBeEnabled();
+
+    fireEvent.click(nextButton);
+    await act(async () => {});
+
+    expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+      "回答です。",
+      expect.objectContaining({ rawContent: "%えー% 回答です。" }),
+    );
+  });
+
   it("ミュートで聞くのをやめ、もう一度押すと戻る", async () => {
     const onSubmit = vi.fn();
     await renderPanel({ onSubmit });

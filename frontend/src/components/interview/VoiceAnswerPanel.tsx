@@ -30,7 +30,7 @@ const MIC_UNAVAILABLE_MESSAGE =
   "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。";
 
 const HELP_TEXT =
-  "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。";
+  "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。待たずに送りたいときは「次の質問へ」を押してください。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。";
 
 /** 入力レベルの取りうる幅。外周リングの広がりに使う */
 const MAX_INPUT_LEVEL = 60;
@@ -439,6 +439,16 @@ export function VoiceAnswerPanel({
             ?
           </button>
         </div>
+
+        {/* 無音を待たずに回答を確定させる。何も話していないうちは押せない */}
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!listening || !heard}
+          onClick={closeSegment}
+        >
+          次の質問へ
+        </Button>
 
         {openedPopover === "settings" && (
           <VoiceSettingsPanel
