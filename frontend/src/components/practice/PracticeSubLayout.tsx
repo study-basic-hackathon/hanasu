@@ -13,7 +13,7 @@ type PracticeSubLayoutProps = {
 
 /**
  * S-10〜S-13 に共通する骨格（S-09〜S-13 4章）。
- * 上部に 48px の帯を置き、中身は幅 708px の枠に収める。
+ * 上部に 48px の帯（ロゴ + 画面 ID + 画面名）を置き、中身は幅 708px の枠に収める。
  */
 export function PracticeSubLayout({
   screenId,
