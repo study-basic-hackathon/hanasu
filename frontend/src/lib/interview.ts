@@ -46,14 +46,45 @@ export function resolveMaxTurns(value: string | null): number {
   return parseMaxTurns(value) ?? DEFAULT_MAX_TURNS;
 }
 
-/** 無音での自動停止（秒）。無音がこの長さ続いたら停止して送信する（S-08 6.1） */
-export const SILENCE_LIMIT_SECONDS = 3;
+/**
+ * 音声入力モードの常時録音（S-08 6.1）。
+ * 面接中は録音を止めず、無音が続いたところで発話を1ターンとして区切る。
+ * 無音の長さ・入力感度・読み上げ速度は面接中に設定パネルで変えられる。
+ */
 
-/** 1回の録音の最長（秒） */
+/** 発話を区切る無音の長さ（秒） */
+export const DEFAULT_SILENCE_SECONDS = 3;
+export const MIN_SILENCE_SECONDS = 1;
+export const MAX_SILENCE_SECONDS = 5;
+export const SILENCE_SECONDS_STEP = 0.5;
+
+/** 入力レベルの閾値。平均レベルがこれ未満のあいだを無音とみなす */
+export const DEFAULT_INPUT_THRESHOLD = 8;
+export const MIN_INPUT_THRESHOLD = 2;
+export const MAX_INPUT_THRESHOLD = 30;
+
+/** 面接官の読み上げ速度（倍）。文字入力モードは既定値で固定する */
+export const DEFAULT_SPEECH_PLAYBACK_RATE = 1.2;
+export const MIN_SPEECH_PLAYBACK_RATE = 0.8;
+export const MAX_SPEECH_PLAYBACK_RATE = 2;
+export const SPEECH_PLAYBACK_RATE_STEP = 0.1;
+
+/** 1回の発話の最長（秒）。超えたら区切って送る */
 export const RECORDING_MAX_SECONDS = 180;
 
-/** 1回の録音の最短（秒）。これに満たないと送らない */
+/** 1回の発話の最短（秒）。これに満たない区間は送らずに捨てる */
 export const RECORDING_MIN_SECONDS = 1;
+
+/** 設定パネルのスライダーが受け取る値を範囲に収める */
+export function clampToRange(
+  value: number,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
 
 /**
  * フィラーとして数える語。

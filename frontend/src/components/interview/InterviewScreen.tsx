@@ -36,6 +36,7 @@ import {
   TRANSCRIPT_DISPLAY_MODE_LABEL,
 } from "@/lib/domain";
 import {
+  DEFAULT_SPEECH_PLAYBACK_RATE,
   FIRST_QUESTION,
   resolveMaxTurns,
   resolveReadAloudMode,
@@ -53,7 +54,6 @@ const COMPLETION_TURN: ChatTurn = {
   role: "assistant",
   content: "お疲れ様でした",
 };
-const INTERVIEWER_SPEECH_PLAYBACK_RATE = 1.2;
 
 type SpeechState = {
   turnIndex: number | null;
@@ -140,6 +140,10 @@ export function InterviewScreen({
   const [transcriptDisplayMode, setTranscriptDisplayMode] =
     useState<TranscriptDisplayMode>(() => (isTutorial ? "clean" : "raw"));
   const [speechState, setSpeechState] = useState<SpeechState>(IDLE_SPEECH_STATE);
+  // 読み上げ速度は入力パネルの設定から変える。再生中の音声にも即座に効かせる
+  const [speechPlaybackRate, setSpeechPlaybackRate] = useState(
+    DEFAULT_SPEECH_PLAYBACK_RATE,
+  );
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [exitAction, setExitAction] = useState<ExitAction | null>(null);
@@ -159,8 +163,15 @@ export function InterviewScreen({
   const initialAutoSpeechStartedRef = useRef(false);
   const pendingAutoSpeechIndexRef = useRef<number | null>(null);
   const interviewControllerRef = useRef(interviewController);
+  const speechPlaybackRateRef = useRef(speechPlaybackRate);
   const chatControllerRef = useRef<AbortController | null>(null);
   const exitStartedRef = useRef(false);
+
+  const changeSpeechPlaybackRate = useCallback((rate: number) => {
+    speechPlaybackRateRef.current = rate;
+    setSpeechPlaybackRate(rate);
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, []);
 
   const releaseSpeech = useCallback(() => {
     speechControllerRef.current?.abort();
@@ -214,7 +225,7 @@ export function InterviewScreen({
         speechObjectUrlRef.current = objectUrl;
         audioRef.current ??= new Audio();
         audioRef.current.src = objectUrl;
-        audioRef.current.playbackRate = INTERVIEWER_SPEECH_PLAYBACK_RATE;
+        audioRef.current.playbackRate = speechPlaybackRateRef.current;
         audioRef.current.onended = () => {
           if (operationId !== speechOperationIdRef.current) return;
           speechOperationIdRef.current += 1;
@@ -316,6 +327,9 @@ export function InterviewScreen({
     return () => controller.abort();
   }, [companyId, isTutorial]);
 
+  // 生成中も「面接官の番」に含める。常時録音はこの間マイクを止める（S-08 6.1）
+  const interviewerSpeaking =
+    speechState.status === "loading" || speechState.status === "playing";
   const answeredTurns = turns.filter((turn) => turn.role === "user").length;
   // 回答を送るまでは、いま答えようとしているターンの番号（S-08 4章）
   const currentTurn = Math.min(answeredTurns + 1, maxTurns);
@@ -714,6 +728,9 @@ export function InterviewScreen({
             onSubmit={handleSubmit}
             waiting={waiting || evaluating}
             disabled={hasReachedTurnLimit}
+            interviewerSpeaking={interviewerSpeaking}
+            speechPlaybackRate={speechPlaybackRate}
+            onChangeSpeechPlaybackRate={changeSpeechPlaybackRate}
             exitSignal={interviewController.signal}
           />
           <p className="text-note text-ink-muted">

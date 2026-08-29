@@ -191,13 +191,22 @@ async function installFakeRecorder(page: Page) {
       }
     }
 
+    // 常時録音の区切りを操るため、入力レベルはテストから書き換えられるようにする
+    Object.defineProperty(window, "__inputLevel", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
     class FakeAudioContext {
       createAnalyser() {
         return {
           fftSize: 0,
           frequencyBinCount: 32,
           getByteFrequencyData(data: Uint8Array) {
-            data.fill(16);
+            data.fill(
+              (window as unknown as { __inputLevel: number }).__inputLevel,
+            );
           },
         };
       }
@@ -222,9 +231,13 @@ async function installFakeRecorder(page: Page) {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: {
-        getUserMedia: async () => ({
-          getTracks: () => [{ stop() {} }],
-        }),
+        getUserMedia: async () => {
+          const track = { enabled: true, stop() {} };
+          return {
+            getTracks: () => [track],
+            getAudioTracks: () => [track],
+          };
+        },
       },
     });
   });
@@ -259,11 +272,19 @@ async function mockStt(page: Page) {
   return () => requestCount;
 }
 
-/** 録音を1回ぶん取り、文字起こしの結果を送る */
-async function recordAnswer(page: Page) {
-  await page.getByRole("button", { name: "回答を録音する" }).click();
-  await page.waitForTimeout(1_100);
-  await page.getByRole("button", { name: "録音を停止して送信する" }).click();
+/**
+ * 常時録音へ1発話ぶん話しかける。
+ * 声を出してから黙り、無音の長さぶん待つと発話が確定して送られる。
+ */
+async function speakAnswer(page: Page, silenceMs = 3_400) {
+  await page.evaluate(() => {
+    (window as unknown as { __inputLevel: number }).__inputLevel = 40;
+  });
+  await page.waitForTimeout(1_300);
+  await page.evaluate(() => {
+    (window as unknown as { __inputLevel: number }).__inputLevel = 0;
+  });
+  await page.waitForTimeout(silenceMs);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -631,12 +652,12 @@ test("音声入力モードでは音声の計測値で評価する", async ({
     page.getByRole("button", { name: "文字入力で回答" }),
   ).toHaveCount(0);
 
-  await recordAnswer(page);
+  await speakAnswer(page);
   await expect(
     page.getByText("経験から学んだことを教えてください。"),
   ).toBeVisible();
 
-  await recordAnswer(page);
+  await speakAnswer(page);
 
   await expect(page.getByText("フィラー 1 回")).toHaveCount(2);
   await page.getByRole("button", { name: "評価を見る" }).click();
@@ -734,11 +755,7 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
   });
   await expect(rawButton).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByRole("button", { name: "回答を録音する" }).click();
-  await page.waitForTimeout(1_100);
-  await page
-    .getByRole("button", { name: "録音を停止して送信する" })
-    .click();
+  await speakAnswer(page);
 
   await expect(page.getByText("えー", { exact: true })).toHaveClass(
     /text-accent/,
@@ -751,11 +768,7 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
   expect(sttRequestCount()).toBe(1);
   expect(chatRequestCount).toBe(1);
 
-  await page.getByRole("button", { name: "回答を録音する" }).click();
-  await page.waitForTimeout(1_100);
-  await page
-    .getByRole("button", { name: "録音を停止して送信する" })
-    .click();
+  await speakAnswer(page);
 
   await expect(page.getByText("回答です。", { exact: true })).toHaveCount(2);
   await rawButton.click();
@@ -763,6 +776,33 @@ test("S-08 の音声回答を STT へ送り、送信済み・以後の表示を 
   await expect(page.getByText("回答です。", { exact: true })).toHaveCount(0);
   expect(sttRequestCount()).toBe(2);
   expect(chatRequestCount).toBe(1);
+});
+
+test("音声の設定で無音の長さを変えると、その長さで発話が確定する", async ({
+  page,
+}) => {
+  await installFakeRecorder(page);
+  const sttRequestCount = await mockStt(page);
+  await page.route("http://localhost:8000/interviews/chat", async (route) =>
+    fulfillJson(route, { text: "次の質問です。" }),
+  );
+  await page.goto(
+    "/interview/voice?companyId=1&strength=hard&readAloud=disabled&maxTurns=3",
+  );
+
+  await expect(page.getByText("どうぞお話しください")).toBeVisible();
+  await page.getByRole("button", { name: "音声の設定" }).click();
+  const silence = page.getByLabel("無音の長さ");
+  await expect(silence).toHaveValue("3");
+  await silence.fill("1");
+  await expect(page.getByText("1.0 秒")).toBeVisible();
+  await page.getByRole("button", { name: "音声の設定を閉じる" }).click();
+
+  // 1秒に縮めたので、3秒待たずに発話が確定する
+  await speakAnswer(page, 1_400);
+
+  await expect(page.getByText("次の質問です。")).toBeVisible();
+  expect(sttRequestCount()).toBe(1);
 });
 
 test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡す", async ({
@@ -792,11 +832,7 @@ test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡
   });
   await page.goto("/tutorial/voice?readAloud=disabled");
 
-  await page.getByRole("button", { name: "回答を録音する" }).click();
-  await page.waitForTimeout(1_100);
-  await page
-    .getByRole("button", { name: "録音を停止して送信する" })
-    .click();
+  await speakAnswer(page);
 
   await expect(page.getByText("お疲れ様でした")).toBeVisible();
   await expect(page.getByRole("button", { name: "評価を見る" })).toBeVisible();

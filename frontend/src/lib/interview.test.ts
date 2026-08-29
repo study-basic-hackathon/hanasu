@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MAX_TURNS,
   DEFAULT_READ_ALOUD_MODE,
+  DEFAULT_SILENCE_SECONDS,
   FIRST_QUESTION,
   MAX_MAX_TURNS,
   MIN_MAX_TURNS,
   RECORDING_MAX_SECONDS,
   RECORDING_MIN_SECONDS,
-  SILENCE_LIMIT_SECONDS,
   TUTORIAL_MAX_TURNS,
   TUTORIAL_QUESTION,
   countFillers,
@@ -34,7 +34,7 @@ describe("面接進行の定数", () => {
     expect(DEFAULT_MAX_TURNS).toBe(10);
     expect(MAX_MAX_TURNS).toBe(25);
     expect(TUTORIAL_MAX_TURNS).toBe(1);
-    expect(SILENCE_LIMIT_SECONDS).toBe(3);
+    expect(DEFAULT_SILENCE_SECONDS).toBe(3);
     expect(RECORDING_MIN_SECONDS).toBe(1);
     expect(RECORDING_MAX_SECONDS).toBe(180);
     expect(FIRST_QUESTION).toContain("自己紹介");

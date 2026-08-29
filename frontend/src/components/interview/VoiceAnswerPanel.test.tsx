@@ -1,11 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AnswerDetail } from "@/components/interview/InterviewInput";
@@ -29,6 +22,9 @@ vi.mock("@/lib/interview-api", () => ({
 }));
 
 type Listener = (event: Event) => void;
+
+/** 測定ループが読む入力レベル。テストごとに書き換えて発話と無音を作る */
+let inputLevel = 0;
 
 class FakeMediaRecorder {
   static instances: FakeMediaRecorder[] = [];
@@ -73,7 +69,7 @@ class FakeAudioContext {
     return {
       fftSize: 0,
       frequencyBinCount: 32,
-      getByteFrequencyData: (data: Uint8Array) => data.fill(16),
+      getByteFrequencyData: (data: Uint8Array) => data.fill(inputLevel),
     } as unknown as AnalyserNode;
   }
 
@@ -96,19 +92,33 @@ const transcription = {
   chars_per_min: 150,
 };
 
-describe("VoiceAnswerPanel", () => {
+type PanelOptions = {
+  onSubmit?: (content: string, detail?: AnswerDetail) => void;
+  waiting?: boolean;
+  disabled?: boolean;
+  interviewerSpeaking?: boolean;
+  speechPlaybackRate?: number;
+  onChangeSpeechPlaybackRate?: (rate: number) => void;
+  exitSignal?: AbortSignal;
+};
+
+describe("VoiceAnswerPanel の常時録音", () => {
   const trackStop = vi.fn();
   const getUserMedia = vi.fn();
-  let now = 0;
+  let track: { enabled: boolean; stop: () => void };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     FakeMediaRecorder.instances = [];
-    now = 0;
-    vi.spyOn(Date, "now").mockImplementation(() => now);
+    inputLevel = 0;
+    track = { enabled: true, stop: trackStop };
     getUserMedia.mockResolvedValue({
-      getTracks: () => [{ stop: trackStop }],
+      getTracks: () => [track],
+      getAudioTracks: () => [track],
     } as unknown as MediaStream);
+    mocks.transcribeAudio.mockResolvedValue(transcription);
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { getUserMedia },
@@ -119,49 +129,64 @@ describe("VoiceAnswerPanel", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
-  function renderPanel(options: {
-    onSubmit?: (content: string, detail?: AnswerDetail) => void;
-    disabled?: boolean;
-    exitSignal?: AbortSignal;
-  } = {}) {
-    const onSubmit = options.onSubmit ?? vi.fn();
-    render(
-      <VoiceAnswerPanel
-        onSubmit={onSubmit}
-        waiting={false}
-        disabled={options.disabled ?? false}
-        exitSignal={options.exitSignal ?? new AbortController().signal}
-      />,
-    );
-    return { onSubmit };
+  function panelProps(options: PanelOptions) {
+    return {
+      onSubmit: options.onSubmit ?? vi.fn(),
+      waiting: options.waiting ?? false,
+      disabled: options.disabled ?? false,
+      interviewerSpeaking: options.interviewerSpeaking ?? false,
+      speechPlaybackRate: options.speechPlaybackRate ?? 1.2,
+      onChangeSpeechPlaybackRate:
+        options.onChangeSpeechPlaybackRate ?? vi.fn(),
+      exitSignal: options.exitSignal ?? new AbortController().signal,
+    };
   }
 
-  async function startAndStopRecording() {
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-    const stopButton = await screen.findByRole("button", {
-      name: "録音を停止して送信する",
+  /** マイクの取得を待ってから操作できる状態にする */
+  async function renderPanel(options: PanelOptions = {}) {
+    const props = panelProps(options);
+    const view = render(<VoiceAnswerPanel {...props} />);
+    await act(async () => {});
+    return {
+      ...props,
+      rerender: (next: PanelOptions = {}) =>
+        view.rerender(<VoiceAnswerPanel {...panelProps({ ...options, ...next })} />),
+    };
+  }
+
+  async function advance(ms: number) {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
     });
-    now = 1_500;
-    fireEvent.click(stopButton);
   }
 
-  it("録音停止後に STT を1回だけ呼び、clean 表示用テキストと全計測値を渡す", async () => {
-    mocks.transcribeAudio.mockResolvedValue(transcription);
+  /** 話してから黙る。既定では区切りに届くまで黙る */
+  async function speakThenPause(speakMs = 1_500, silenceMs = 3_100) {
+    inputLevel = 40;
+    await advance(speakMs);
+    inputLevel = 0;
+    await advance(silenceMs);
+    await act(async () => {});
+  }
+
+  it("押す操作なしで聞き始め、無音が続いた発話を計測値ごと送る", async () => {
     const onSubmit = vi.fn();
-    renderPanel({ onSubmit });
+    await renderPanel({ onSubmit });
 
-    await startAndStopRecording();
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+    expect(FakeMediaRecorder.instances[0].state).toBe("recording");
+    expect(track.enabled).toBe(true);
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    await speakThenPause();
+
     expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
-    expect(mocks.transcribeAudio.mock.calls[0][0]).toMatchObject({
-      type: "audio/webm;codecs=opus",
-    });
-    expect(onSubmit).toHaveBeenCalledWith("回答です。", {
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith("回答です。", {
       rawContent: "%えー% 回答です。",
       audioSeconds: 2,
       audioDurationMs: 2_000,
@@ -172,173 +197,171 @@ describe("VoiceAnswerPanel", () => {
     });
   });
 
-  it("録音を取り消すと音声を捨て、STT と会話追加を行わない", async () => {
-    const onSubmit = vi.fn();
-    renderPanel({ onSubmit });
+  it("話しているあいだと無音の残り秒数を知らせる", async () => {
+    await renderPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-    await screen.findByRole("button", { name: "取り消す" });
-    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
+    inputLevel = 40;
+    await advance(500);
+    expect(screen.getByText("聞き取り中…")).toBeInTheDocument();
+
+    inputLevel = 0;
+    await advance(1_200);
+    expect(screen.getByText(/^あと 1\.\d 秒で送ります$/)).toBeInTheDocument();
+  });
+
+  it("送ったあとは面接官の番が終わるまでマイクを止め、終わると自分で戻る", async () => {
+    const { rerender } = await renderPanel();
+    const firstRecorder = FakeMediaRecorder.instances[0];
+
+    rerender({ waiting: true });
+    expect(track.enabled).toBe(false);
+    expect(firstRecorder.state).toBe("inactive");
+    expect(screen.getByText("面接官が考えています")).toBeInTheDocument();
+
+    rerender({ waiting: false, interviewerSpeaking: true });
+    expect(track.enabled).toBe(false);
+    expect(screen.getByText("面接官が話しています")).toBeInTheDocument();
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+
+    rerender({ waiting: false, interviewerSpeaking: false });
+    expect(track.enabled).toBe(true);
+    expect(FakeMediaRecorder.instances).toHaveLength(2);
+    expect(FakeMediaRecorder.instances[1].state).toBe("recording");
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+  });
+
+  it("面接官の番に入った区間は文字起こしへ送らない", async () => {
+    const onSubmit = vi.fn();
+    const { rerender } = await renderPanel({ onSubmit });
+
+    inputLevel = 40;
+    await advance(1_500);
+    rerender({ interviewerSpeaking: true });
+    await act(async () => {});
 
     expect(mocks.transcribeAudio).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
-    ).toBeEnabled();
   });
 
-  it("面接終了時に録音と MediaStream を停止し、音声を送らない", async () => {
-    const controller = new AbortController();
+  it("ミュートで聞くのをやめ、もう一度押すと戻る", async () => {
     const onSubmit = vi.fn();
-    renderPanel({ onSubmit, exitSignal: controller.signal });
+    await renderPanel({ onSubmit });
 
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-    await screen.findByRole("button", { name: "録音を停止して送信する" });
-
-    act(() => controller.abort());
-
-    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
-    expect(trackStop).toHaveBeenCalledOnce();
-    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
-    ).toBeDisabled();
-  });
-
-  it("面接終了時に進行中の STT を中断し、遅い結果から回答を追加しない", async () => {
-    const controller = new AbortController();
-    let sttSignal: AbortSignal | undefined;
-    let resolveTranscription!: (value: typeof transcription) => void;
-    mocks.transcribeAudio.mockImplementation(
-      (_audio: Blob, signal?: AbortSignal) =>
-        new Promise<typeof transcription>((resolve) => {
-          sttSignal = signal;
-          resolveTranscription = resolve;
-        }),
+    fireEvent.click(
+      screen.getByRole("button", { name: "マイクをミュートする" }),
     );
-    const onSubmit = vi.fn();
-    renderPanel({ onSubmit, exitSignal: controller.signal });
 
-    await startAndStopRecording();
-    await waitFor(() => expect(mocks.transcribeAudio).toHaveBeenCalledOnce());
+    expect(track.enabled).toBe(false);
+    expect(screen.getByText("ミュート中。押すと再開します")).toBeInTheDocument();
 
-    act(() => controller.abort());
-    await act(async () => resolveTranscription(transcription));
-
-    expect(controller.signal.aborted).toBe(true);
-    expect(sttSignal?.aborted).toBe(true);
+    await speakThenPause();
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "マイクをオンにする" }));
+
+    expect(track.enabled).toBe(true);
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+  });
+
+  it("文字が起きなかった区間は黙って捨てて聞き続ける", async () => {
+    const onSubmit = vi.fn();
+    mocks.transcribeAudio.mockResolvedValue({
+      ...transcription,
+      raw_transcript: "",
+      clean_transcript: "",
+    });
+    await renderPanel({ onSubmit });
+
+    await speakThenPause();
+
+    expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+    expect(track.enabled).toBe(true);
+  });
+
+  it("1秒に満たない物音は送らない", async () => {
+    const onSubmit = vi.fn();
+    await renderPanel({ onSubmit });
+
+    await speakThenPause(400, 3_100);
+
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("文字起こしに失敗しても録音を止めず、注意は時間で消える", async () => {
+    const onSubmit = vi.fn();
+    mocks.transcribeAudio.mockRejectedValue(new ApiError("unavailable", 503));
+    await renderPanel({ onSubmit });
+
+    await speakThenPause();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "聞き取れませんでした。もう一度お話しください。",
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(track.enabled).toBe(true);
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+
+    await advance(4_100);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("1秒未満の録音は STT へ送らず再試行できる", async () => {
-    const onSubmit = vi.fn();
-    renderPanel({ onSubmit });
+  it("上限ターンに達したらマイクを止める", async () => {
+    const { rerender } = await renderPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-    const stopButton = await screen.findByRole("button", {
-      name: "録音を停止して送信する",
-    });
-    now = 500;
-    fireEvent.click(stopButton);
+    rerender({ disabled: true });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "録音が短すぎます。もう一度お試しください。",
-    );
-    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(track.enabled).toBe(false);
+    expect(screen.getByText("面接が終了しました")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
-    ).toBeEnabled();
+      screen.getByRole("button", { name: "マイクをミュートする" }),
+    ).toBeDisabled();
   });
 
-  it("マイクを拒否されたら録音を押せなくし、確認のうえ同じ設定の文字入力ページへ移る", async () => {
+  it("面接の終了時に録音と MediaStream を止める", async () => {
+    const controller = new AbortController();
+    await renderPanel({ exitSignal: controller.signal });
+
+    await act(async () => controller.abort());
+
+    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
+    expect(trackStop).toHaveBeenCalled();
+  });
+
+  it("マイクを拒否されたら録音せず、確認のうえ文字入力ページへ移る", async () => {
     getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
     const onSubmit = vi.fn();
-    renderPanel({ onSubmit });
+    await renderPanel({ onSubmit });
 
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(screen.getByRole("alert")).toHaveTextContent(
       "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。",
     );
+    expect(FakeMediaRecorder.instances).toHaveLength(0);
     expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
+      screen.getByRole("button", { name: "マイクをミュートする" }),
     ).toBeDisabled();
-    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
-    expect(onSubmit).not.toHaveBeenCalled();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "文字入力モードで始め直す" }),
-    );
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      "文字入力モードで始め直します。ここまでの会話は失われ、評価は行われません。",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "取り消す" }));
-    expect(mocks.replace).not.toHaveBeenCalled();
 
     fireEvent.click(
       screen.getByRole("button", { name: "文字入力モードで始め直す" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "始め直す" }));
 
-    expect(mocks.replace).toHaveBeenCalledOnce();
-    expect(mocks.replace).toHaveBeenCalledWith(
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
       "/interview/text?companyId=7&strength=standard&readAloud=enabled&maxTurns=10",
     );
   });
 
-  it("無効時は録音開始を受け付けず、方式の切り替えも持たない", () => {
-    renderPanel({ disabled: true });
+  it("使い方を求められたら常時録音の約束ごとを示す", async () => {
+    await renderPanel();
 
-    expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByRole("button", { name: "文字入力で回答" }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "音声入力の使い方" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "回答を録音する" }));
-
-    expect(getUserMedia).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    {
-      label: "401",
-      error: new ApiError("unauthorized", 401),
-      message:
-        "サインインの有効期限が切れました。もう一度サインインしてください。",
-    },
-    {
-      label: "413",
-      error: new ApiError("too large", 413),
-      message:
-        "録音データが大きすぎます。短く区切ってもう一度お試しください。",
-    },
-    {
-      label: "503",
-      error: new ApiError("unavailable", 503),
-      message: "聞き取れませんでした。もう一度お話しください。",
-    },
-    {
-      label: "通信失敗",
-      error: new ApiError("network", null),
-      message: "聞き取れませんでした。もう一度お話しください。",
-    },
-  ])("$label で会話を追加せず再試行できる", async ({ error, message }) => {
-    mocks.transcribeAudio.mockRejectedValue(error);
-    const onSubmit = vi.fn();
-    renderPanel({ onSubmit });
-
-    await startAndStopRecording();
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(message);
-    expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("button", { name: "回答を録音する" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "話し終えて少し黙ると、そこまでを回答として送ります",
+    );
   });
 });

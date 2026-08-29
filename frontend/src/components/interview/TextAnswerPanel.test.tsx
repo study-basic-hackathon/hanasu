@@ -20,6 +20,9 @@ describe("TextAnswerPanel", () => {
         onSubmit={onSubmit}
         waiting={options.waiting ?? false}
         disabled={options.disabled ?? false}
+        interviewerSpeaking={false}
+        speechPlaybackRate={1.2}
+        onChangeSpeechPlaybackRate={vi.fn()}
         exitSignal={options.exitSignal ?? new AbortController().signal}
       />,
     );

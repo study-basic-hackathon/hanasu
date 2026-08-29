@@ -8,6 +8,7 @@ import {
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { InterviewInputProps } from "@/components/interview/InterviewInput";
 import { InterviewScreen } from "@/components/interview/InterviewScreen";
 import { TextAnswerPanel } from "@/components/interview/TextAnswerPanel";
 import type { ChatTurn } from "@/lib/domain";
@@ -18,6 +19,23 @@ const screenProps = {
   answerMethod: "text",
   InputPanel: TextAnswerPanel,
 } as const;
+
+/** 入力パネルへ渡す値と、そこからの変更を確かめるための差し込み */
+function ProbeInputPanel({
+  interviewerSpeaking,
+  speechPlaybackRate,
+  onChangeSpeechPlaybackRate,
+}: InterviewInputProps) {
+  return (
+    <div>
+      <span>面接官の発話: {interviewerSpeaking ? "あり" : "なし"}</span>
+      <span>読み上げ速度: {speechPlaybackRate.toFixed(1)}</span>
+      <button type="button" onClick={() => onChangeSpeechPlaybackRate(1.8)}>
+        速度を上げる
+      </button>
+    </div>
+  );
+}
 
 const mocks = vi.hoisted(() => ({
   audioPlay: vi.fn(),
@@ -705,6 +723,31 @@ describe("InterviewScreen の読み上げモード", () => {
       expect(FakeAudio.instances[0].pause).toHaveBeenCalled(),
     );
     expect(mocks.getCompany).not.toHaveBeenCalled();
+  });
+
+  it("読み上げ中を入力パネルへ伝え、速度の変更を再生中の音声へ即座に反映する", async () => {
+    render(
+      <InterviewScreen
+        mode="interview"
+        answerMethod="voice"
+        InputPanel={ProbeInputPanel}
+      />,
+    );
+    enableReadAloud();
+
+    expect(screen.getByText("面接官の発話: なし")).toBeInTheDocument();
+    expect(screen.getByText("読み上げ速度: 1.2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "読み上げる" }));
+
+    expect(await screen.findByText("面接官の発話: あり")).toBeInTheDocument();
+    await waitFor(() => expect(FakeAudio.instances).toHaveLength(1));
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.2);
+
+    fireEvent.click(screen.getByRole("button", { name: "速度を上げる" }));
+
+    expect(screen.getByText("読み上げ速度: 1.8")).toBeInTheDocument();
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.8);
   });
 
   it("評価開始に失敗しても終了時の会話を保持し、評価を見るから再試行できる", async () => {

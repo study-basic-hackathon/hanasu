@@ -21,6 +21,14 @@ export type InterviewInputProps = {
   waiting: boolean;
   /** 上限ターンに達して回答を受け付けない状態 */
   disabled: boolean;
+  /**
+   * 面接官が読み上げている（生成中を含む）。
+   * 常時録音では、この間もマイクを止めて自分の声だけを拾う（S-08 6.1）。
+   */
+  interviewerSpeaking: boolean;
+  /** 面接官の読み上げ速度（倍）。音声入力モードの設定パネルから変える */
+  speechPlaybackRate: number;
+  onChangeSpeechPlaybackRate: (rate: number) => void;
   /** 面接の終了時に録音・文字起こし・入力中の一時データを破棄する */
   exitSignal: AbortSignal;
 };

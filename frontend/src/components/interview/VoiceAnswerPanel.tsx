@@ -4,27 +4,36 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { InterviewInputProps } from "@/components/interview/InterviewInput";
+import { VoiceSettingsPanel } from "@/components/interview/VoiceSettingsPanel";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ApiError } from "@/lib/api-client";
-import { formatElapsed } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import {
+  DEFAULT_INPUT_THRESHOLD,
+  DEFAULT_SILENCE_SECONDS,
   RECORDING_MAX_SECONDS,
   RECORDING_MIN_SECONDS,
-  SILENCE_LIMIT_SECONDS,
 } from "@/lib/interview";
 import { transcribeAudio } from "@/lib/interview-api";
 
-type RecordingState = "idle" | "requesting" | "recording" | "transcribing";
-const WAVE_BARS = 30;
-const AUDIO_LEVEL_THRESHOLD = 8;
+/** マイクの取得状況。取得できるまでは何も聞けない */
+type MicState = "requesting" | "ready" | "blocked";
+
+/** 録音中の1発話。捨てる判断を区間ごとに閉じ込める */
+type Segment = {
+  recorder: MediaRecorder;
+  discard: () => void;
+};
 
 const MIC_UNAVAILABLE_MESSAGE =
   "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。";
 
-function initialLevels(): number[] {
-  return Array.from({ length: WAVE_BARS }, () => 4);
-}
+const HELP_TEXT =
+  "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。";
+
+/** 入力レベルの取りうる幅。外周リングの広がりに使う */
+const MAX_INPUT_LEVEL = 60;
 
 function preferredMimeType(): string | undefined {
   const candidates = [
@@ -43,17 +52,24 @@ function transcriptionFailureMessage(error: unknown): string {
       return "サインインの有効期限が切れました。もう一度サインインしてください。";
     }
     if (error.status === 413) {
-      return "録音データが大きすぎます。短く区切ってもう一度お試しください。";
+      return "うまく聞き取れませんでした。少し短く区切ってお話しください。";
     }
   }
   return "聞き取れませんでした。もう一度お話しください。";
 }
 
-/** 音声入力モードの回答欄（S-08 6章）。 */
+/**
+ * 音声入力モードの回答欄（S-08 6.1）。
+ * 面接のあいだ録音を止めず、無音が続いたところで発話を1ターンとして送る。
+ * 面接官の番（文字起こし・返事待ち・読み上げ）はマイクを止め、ターンを交互に保つ。
+ */
 export function VoiceAnswerPanel({
   onSubmit,
   waiting,
   disabled,
+  interviewerSpeaking,
+  speechPlaybackRate,
+  onChangeSpeechPlaybackRate,
   exitSignal,
 }: InterviewInputProps) {
   const router = useRouter();
@@ -63,25 +79,54 @@ export function VoiceAnswerPanel({
   const query = searchParams.toString();
   const textModeHref =
     pathname.replace(/\/voice$/, "/text") + (query === "" ? "" : `?${query}`);
-  const [recording, setRecording] = useState<RecordingState>("idle");
-  const [elapsed, setElapsed] = useState(0);
+
+  const [micState, setMicState] = useState<MicState>("requesting");
+  const [muted, setMuted] = useState(false);
+  // 発話を拾ったかどうか。表示の持ち主は下の測定ループだけにする
+  const [heard, setHeard] = useState(false);
   const [silence, setSilence] = useState(0);
-  const [levels, setLevels] = useState<number[]>(initialLevels);
+  const [level, setLevel] = useState(0);
+  const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // マイクが使えないと分かったら、録音の操作を押せなくして移行の導線だけ残す
-  const [micBlocked, setMicBlocked] = useState(false);
+  const [openedPopover, setOpenedPopover] = useState<"settings" | "help" | null>(
+    null,
+  );
   const [confirmingTextMode, setConfirmingTextMode] = useState(false);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const [silenceSeconds, setSilenceSeconds] = useState(DEFAULT_SILENCE_SECONDS);
+  const [inputThreshold, setInputThreshold] = useState(DEFAULT_INPUT_THRESHOLD);
+
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const segmentRef = useRef<Segment | null>(null);
   const startedAtRef = useRef(0);
-  const discardRef = useRef(false);
-  const hasSpokenRef = useRef(false);
+  const spokeFromRef = useRef<number | null>(null);
   const silentFromRef = useRef<number | null>(null);
   const sttControllerRef = useRef<AbortController | null>(null);
   const disposedRef = useRef(false);
+  const noticeTimerRef = useRef<number | null>(null);
+
+  const hasExited = exitSignal.aborted;
+  // 面接官の番、ミュート、終了のあいだはマイクを止める
+  const listening =
+    micState === "ready" &&
+    !muted &&
+    !sending &&
+    !waiting &&
+    !interviewerSpeaking &&
+    !disabled &&
+    !hasExited;
+
+  const showNotice = useCallback((message: string) => {
+    setNotice(message);
+    if (noticeTimerRef.current !== null) {
+      window.clearTimeout(noticeTimerRef.current);
+    }
+    noticeTimerRef.current = window.setTimeout(() => {
+      if (!disposedRef.current) setNotice(null);
+      noticeTimerRef.current = null;
+    }, 4_000);
+  }, []);
 
   const releaseAudio = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -91,290 +136,336 @@ export function VoiceAnswerPanel({
     analyserRef.current = null;
   }, []);
 
+  /** 録音中の区間を捨てる。ミュートや面接官の番に入るとき、物音だけだったときに使う */
+  const discardSegment = useCallback(() => {
+    const segment = segmentRef.current;
+    segmentRef.current = null;
+    if (!segment) return;
+    segment.discard();
+    if (segment.recorder.state === "recording") segment.recorder.stop();
+  }, []);
+
   const discardTemporaryState = useCallback(() => {
-    discardRef.current = true;
     sttControllerRef.current?.abort();
     sttControllerRef.current = null;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-    recorderRef.current = null;
-    chunksRef.current = [];
+    discardSegment();
     releaseAudio();
-    setRecording("idle");
-    setElapsed(0);
-    setSilence(0);
-    setLevels(initialLevels());
+    setSending(false);
     setNotice(null);
-  }, [releaseAudio]);
+  }, [discardSegment, releaseAudio]);
 
   useEffect(() => {
-    if (!exitSignal || exitSignal.aborted) return;
+    if (exitSignal.aborted) return;
     exitSignal.addEventListener("abort", discardTemporaryState);
     return () => exitSignal.removeEventListener("abort", discardTemporaryState);
   }, [discardTemporaryState, exitSignal]);
 
+  // マイクは画面を開いたときに一度だけ取得し、面接のあいだ持ち続ける
   useEffect(() => {
     disposedRef.current = false;
+    let cancelled = false;
+
+    async function acquireMicrophone() {
+      if (
+        !navigator.mediaDevices?.getUserMedia ||
+        typeof MediaRecorder === "undefined"
+      ) {
+        setMicState("blocked");
+        setNotice(MIC_UNAVAILABLE_MESSAGE);
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        if (cancelled || disposedRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        const audioContext = new AudioContext();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        audioContext.createMediaStreamSource(stream).connect(analyser);
+        streamRef.current = stream;
+        audioContextRef.current = audioContext;
+        analyserRef.current = analyser;
+        setMicState("ready");
+      } catch {
+        if (cancelled || disposedRef.current) return;
+        setMicState("blocked");
+        setNotice(MIC_UNAVAILABLE_MESSAGE);
+      }
+    }
+
+    void acquireMicrophone();
+
     return () => {
+      cancelled = true;
       disposedRef.current = true;
-      discardRef.current = true;
+      if (noticeTimerRef.current !== null) {
+        window.clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = null;
+      }
       sttControllerRef.current?.abort();
       sttControllerRef.current = null;
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-      recorderRef.current = null;
-      chunksRef.current = [];
+      discardSegment();
       releaseAudio();
     };
-  }, [releaseAudio]);
+  }, [discardSegment, releaseAudio]);
 
-  const stopRecording = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state !== "recording") return;
-    recorder.stop();
+  const sendSegment = useCallback(
+    (audio: Blob) => {
+      setSending(true);
+      const sttController = new AbortController();
+      sttControllerRef.current?.abort();
+      sttControllerRef.current = sttController;
+
+      transcribeAudio(audio, sttController.signal)
+        .then((result) => {
+          if (disposedRef.current || sttController.signal.aborted) return;
+          setSending(false);
+          // 物音や独り言で文字が起きなかった区間は、黙って捨てて聞き続ける
+          if (result.clean_transcript.trim() === "") return;
+          onSubmit(result.clean_transcript, {
+            rawContent: result.raw_transcript,
+            audioSeconds: Math.round(result.duration_ms / 1000),
+            audioDurationMs: result.duration_ms,
+            characterCount: result.chars,
+            fillerCount: result.filler_count,
+            fillerCountPerMin: result.filler_count_per_min,
+            charsPerMin: result.chars_per_min,
+          });
+        })
+        .catch((error: unknown) => {
+          if (disposedRef.current || sttController.signal.aborted) return;
+          setSending(false);
+          showNotice(transcriptionFailureMessage(error));
+        })
+        .finally(() => {
+          if (sttControllerRef.current === sttController) {
+            sttControllerRef.current = null;
+          }
+        });
+    },
+    [onSubmit, showNotice],
+  );
+
+  /** 1発話ぶんの録音を始める。区切るたびに録り直すことで、毎回そのまま送れる形にする */
+  const startSegment = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream || segmentRef.current) return;
+
+    const mimeType = preferredMimeType();
+    const recorder = new MediaRecorder(
+      stream,
+      mimeType ? { mimeType } : undefined,
+    );
+    const chunks: Blob[] = [];
+    // 捨てる判断は区間ごとに持つ。次の区間の開始が前の stop に影響しないようにする
+    let discarded = false;
+    spokeFromRef.current = null;
+    silentFromRef.current = null;
+    startedAtRef.current = Date.now();
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      if (segmentRef.current?.recorder === recorder) segmentRef.current = null;
+      if (discarded || disposedRef.current || exitSignal.aborted) return;
+      sendSegment(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+    });
+
+    recorder.start(250);
+    segmentRef.current = {
+      recorder,
+      discard: () => {
+        discarded = true;
+      },
+    };
+  }, [exitSignal, sendSegment]);
+
+  /** 発話の終わりとして区切り、文字起こしへ送る */
+  const closeSegment = useCallback(() => {
+    const segment = segmentRef.current;
+    if (!segment || segment.recorder.state !== "recording") return;
+    setHeard(false);
+    setSilence(0);
+    setSending(true);
+    segment.recorder.stop();
   }, []);
 
-  const cancelRecording = useCallback(() => {
-    discardRef.current = true;
-    stopRecording();
-    setRecording("idle");
-    setElapsed(0);
+  /** 物音だけの区間を捨てて、そのまま次の発話を待つ */
+  const restartSegment = useCallback(() => {
+    discardSegment();
+    setHeard(false);
     setSilence(0);
-    setLevels(initialLevels());
-  }, [stopRecording]);
+    startSegment();
+  }, [discardSegment, startSegment]);
+
+  // 聞ける状態のあいだだけ録音し、面接官の番に入ったら区間ごと捨てる
+  useEffect(() => {
+    const track = streamRef.current?.getAudioTracks()[0];
+    if (listening) {
+      if (track) track.enabled = true;
+      startSegment();
+      return;
+    }
+    if (track) track.enabled = false;
+    discardSegment();
+  }, [discardSegment, listening, startSegment]);
 
   useEffect(() => {
-    if (recording !== "recording") return;
+    if (!listening) return;
 
+    let initialized = false;
     const timer = window.setInterval(() => {
-      const seconds = (Date.now() - startedAtRef.current) / 1000;
-      setElapsed(seconds);
-
       const analyser = analyserRef.current;
-      if (analyser) {
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-        const average = data.reduce((sum, value) => sum + value, 0) / data.length;
-        setLevels(
-          Array.from({ length: WAVE_BARS }, (_, index) => {
-            const value = data[Math.floor((index / WAVE_BARS) * data.length)] ?? 0;
-            return Math.max(4, Math.min(46, Math.round(value / 4)));
-          }),
-        );
+      if (!analyser) return;
+      // 前の発話の表示を引きずらないよう、聞き始めの1回で戻す
+      if (!initialized) {
+        initialized = true;
+        setHeard(false);
+        setSilence(0);
+      }
 
-        if (average >= AUDIO_LEVEL_THRESHOLD) {
-          hasSpokenRef.current = true;
-          silentFromRef.current = null;
-          setSilence(0);
-        } else if (hasSpokenRef.current) {
-          silentFromRef.current ??= Date.now();
-          const silentSeconds = (Date.now() - silentFromRef.current) / 1000;
-          setSilence(silentSeconds);
-          if (silentSeconds >= SILENCE_LIMIT_SECONDS) stopRecording();
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const average = data.reduce((sum, value) => sum + value, 0) / data.length;
+      setLevel(Math.min(MAX_INPUT_LEVEL, average));
+
+      if (average >= inputThreshold) {
+        spokeFromRef.current ??= Date.now();
+        silentFromRef.current = null;
+        setHeard(true);
+        setSilence(0);
+      } else if (spokeFromRef.current !== null) {
+        const spokeFrom = spokeFromRef.current;
+        silentFromRef.current ??= Date.now();
+        const silentSeconds = (Date.now() - silentFromRef.current) / 1000;
+        setSilence(silentSeconds);
+        if (silentSeconds >= silenceSeconds) {
+          // 咳や物音のように短すぎる発話は、回答にせず捨てて聞き直す
+          const spokenSeconds = (silentFromRef.current - spokeFrom) / 1000;
+          if (spokenSeconds < RECORDING_MIN_SECONDS) restartSegment();
+          else closeSegment();
+          return;
         }
       }
 
-      if (seconds >= RECORDING_MAX_SECONDS) stopRecording();
+      if ((Date.now() - startedAtRef.current) / 1000 >= RECORDING_MAX_SECONDS) {
+        closeSegment();
+      }
     }, 100);
 
     return () => window.clearInterval(timer);
-  }, [recording, stopRecording]);
+  }, [closeSegment, inputThreshold, listening, restartSegment, silenceSeconds]);
 
-  async function startRecording() {
-    if (disposedRef.current || exitSignal?.aborted) return;
-    setNotice(null);
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setNotice(MIC_UNAVAILABLE_MESSAGE);
-      setMicBlocked(true);
-      return;
+  const statusText = (() => {
+    if (micState === "requesting") return "マイクの使用許可を確認しています";
+    if (micState === "blocked") return "マイクを使えません";
+    if (hasExited) return "面接を終えました";
+    if (disabled) return "面接が終了しました";
+    if (interviewerSpeaking) return "面接官が話しています";
+    if (waiting) return "面接官が考えています";
+    if (sending) return "文字起こししています";
+    if (muted) return "ミュート中。押すと再開します";
+    if (heard && silence > 0) {
+      const remaining = Math.max(0, silenceSeconds - silence);
+      return `あと ${remaining.toFixed(1)} 秒で送ります`;
     }
+    if (heard) return "聞き取り中…";
+    return "どうぞお話しください";
+  })();
 
-    setRecording("requesting");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (disposedRef.current || exitSignal?.aborted) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      audioContext.createMediaStreamSource(stream).connect(analyser);
-
-      const mimeType = preferredMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      streamRef.current = stream;
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-      recorderRef.current = recorder;
-      chunksRef.current = [];
-      discardRef.current = false;
-      hasSpokenRef.current = false;
-      silentFromRef.current = null;
-
-      recorder.addEventListener("dataavailable", (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      });
-      recorder.addEventListener("stop", () => {
-        const seconds = (Date.now() - startedAtRef.current) / 1000;
-        const audio = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        releaseAudio();
-        recorderRef.current = null;
-
-        if (discardRef.current) {
-          discardRef.current = false;
-          return;
-        }
-        if (disposedRef.current || exitSignal?.aborted) return;
-        if (seconds < RECORDING_MIN_SECONDS) {
-          setRecording("idle");
-          setNotice("録音が短すぎます。もう一度お試しください。");
-          return;
-        }
-
-        setRecording("transcribing");
-        const sttController = new AbortController();
-        sttControllerRef.current?.abort();
-        sttControllerRef.current = sttController;
-        transcribeAudio(audio, sttController.signal)
-          .then((result) => {
-            if (
-              disposedRef.current ||
-              exitSignal?.aborted ||
-              sttController.signal.aborted
-            ) {
-              return;
-            }
-            setRecording("idle");
-            onSubmit(result.clean_transcript, {
-              rawContent: result.raw_transcript,
-              audioSeconds: Math.round(result.duration_ms / 1000),
-              audioDurationMs: result.duration_ms,
-              characterCount: result.chars,
-              fillerCount: result.filler_count,
-              fillerCountPerMin: result.filler_count_per_min,
-              charsPerMin: result.chars_per_min,
-            });
-          })
-          .catch((error: unknown) => {
-            if (
-              disposedRef.current ||
-              exitSignal?.aborted ||
-              sttController.signal.aborted
-            ) {
-              return;
-            }
-            setRecording("idle");
-            setNotice(transcriptionFailureMessage(error));
-          })
-          .finally(() => {
-            if (sttControllerRef.current === sttController) {
-              sttControllerRef.current = null;
-            }
-          });
-      });
-
-      setElapsed(0);
-      setSilence(0);
-      setLevels(initialLevels());
-      startedAtRef.current = Date.now();
-      recorder.start(250);
-      setRecording("recording");
-    } catch {
-      releaseAudio();
-      setRecording("idle");
-      setNotice(MIC_UNAVAILABLE_MESSAGE);
-      setMicBlocked(true);
-    }
-  }
-
-  const isRecording = recording === "recording";
-  const isBusy = recording !== "idle";
-  const hasExited = exitSignal?.aborted ?? false;
-  const remainingSilence = Math.max(0, SILENCE_LIMIT_SECONDS - silence);
+  // 外周リングは、聞いているあいだだけ音量で広がる
+  const ringWidth = listening ? 6 + Math.round((level / MAX_INPUT_LEVEL) * 14) : 6;
 
   return (
     <div className="flex flex-col gap-3.5">
-      {isRecording && (
-        <div className="flex items-center justify-end gap-2 text-label text-danger">
-          <span className="block size-2 rounded-full bg-danger" />
-          録音中 {formatElapsed(elapsed)}
-        </div>
-      )}
+      <div className="relative flex flex-col items-center gap-3 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
+        <p
+          aria-live="polite"
+          className="rounded-card border border-line bg-surface px-4 py-2 text-body-sm text-ink-sub"
+        >
+          {statusText}
+        </p>
 
-      <div className="flex items-center gap-6 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
-        {isRecording ? (
-          <>
-            <button
-              type="button"
-              aria-label="録音を停止して送信する"
-              onClick={stopRecording}
-              className="grid size-16 flex-none place-items-center rounded-full bg-danger shadow-[0_0_0_6px_#f7e6e5]"
-            >
-              <span className="block size-5 rounded-[3px] bg-white" />
-            </button>
-            <div className="flex flex-1 flex-col gap-2.5">
-              <div className="flex h-[46px] items-end gap-[3px]">
-                {levels.map((level, index) => (
-                  <span
-                    key={index}
-                    className="block w-1 rounded-[2px] bg-accent"
-                    style={{ height: `${level}px` }}
-                  />
-                ))}
-              </div>
-              {silence > 0 && (
-                <div className="flex items-center gap-2.5 text-note text-ink-sub">
-                  <span className="rounded-chip border border-[#f0e0b8] bg-[#fdf6e7] px-2 py-1 font-medium text-[#8a6a12]">
-                    無音 {silence.toFixed(1)} 秒
-                  </span>
-                  <span>
-                    あと {remainingSilence.toFixed(1)} 秒 静かなままだと自動で停止します
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex w-[150px] flex-none flex-col gap-2">
-              <Button size="xs" className="h-[38px] w-full" onClick={stopRecording}>
-                停止して送信
-              </Button>
-              <Button
-                variant="secondary"
-                size="xs"
-                className="h-8 w-full text-label"
-                onClick={cancelRecording}
-              >
-                取り消す
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              aria-label="回答を録音する"
-              disabled={isBusy || waiting || disabled || hasExited || micBlocked}
-              onClick={startRecording}
-              className="grid size-16 flex-none place-items-center rounded-full bg-accent shadow-[0_0_0_6px_#e4efee] disabled:cursor-not-allowed disabled:opacity-50"
-            >
+        <div className="flex w-full items-center justify-center gap-10">
+          <button
+            type="button"
+            aria-label="音声の設定"
+            aria-expanded={openedPopover === "settings"}
+            onClick={() =>
+              setOpenedPopover((current) =>
+                current === "settings" ? null : "settings",
+              )
+            }
+            className="grid size-10 place-items-center rounded-full text-[20px] text-ink-sub hover:bg-canvas"
+          >
+            ⚙
+          </button>
+
+          <button
+            type="button"
+            aria-label={muted ? "マイクをオンにする" : "マイクをミュートする"}
+            aria-pressed={muted}
+            disabled={micState !== "ready" || disabled || hasExited}
+            onClick={() => setMuted((current) => !current)}
+            style={{
+              boxShadow: `0 0 0 ${ringWidth}px ${muted ? "#eceff1" : "#e4efee"}`,
+            }}
+            className={cn(
+              "grid size-16 flex-none place-items-center rounded-full transition-[box-shadow] duration-100 disabled:cursor-not-allowed disabled:opacity-50",
+              muted ? "bg-[#8a9299]" : "bg-accent",
+            )}
+          >
+            {muted ? (
+              <span className="block h-0.5 w-6 rounded-full bg-white" />
+            ) : (
               <span className="block size-5 rounded-full bg-white" />
-            </button>
-            <span className="text-body-sm text-ink-sub">
-              {recording === "requesting"
-                ? "マイクの使用許可を確認しています"
-                : recording === "transcribing"
-                  ? "文字起こししています"
-                  : micBlocked
-                    ? "マイクを使えません"
-                    : "押して回答を録音します"}
-            </span>
-          </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            aria-label="音声入力の使い方"
+            aria-expanded={openedPopover === "help"}
+            onClick={() =>
+              setOpenedPopover((current) => (current === "help" ? null : "help"))
+            }
+            className="grid size-10 place-items-center rounded-full text-[20px] text-ink-sub hover:bg-canvas"
+          >
+            ?
+          </button>
+        </div>
+
+        {openedPopover === "settings" && (
+          <VoiceSettingsPanel
+            silenceSeconds={silenceSeconds}
+            onChangeSilenceSeconds={setSilenceSeconds}
+            inputThreshold={inputThreshold}
+            onChangeInputThreshold={setInputThreshold}
+            speechPlaybackRate={speechPlaybackRate}
+            onChangeSpeechPlaybackRate={onChangeSpeechPlaybackRate}
+            level={level}
+            maxLevel={MAX_INPUT_LEVEL}
+            onClose={() => setOpenedPopover(null)}
+          />
+        )}
+        {openedPopover === "help" && (
+          <div
+            role="note"
+            className="absolute bottom-[calc(100%-8px)] right-6 w-[320px] rounded-card border border-line bg-surface p-4 text-note leading-[1.8] text-ink-sub shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          >
+            {HELP_TEXT}
+          </div>
         )}
       </div>
 
       {notice && <p role="alert" className="text-note text-danger">{notice}</p>}
       {/* 画面内では方式を切り替えない。始め直すことでだけ文字入力へ移る */}
-      {micBlocked && (
+      {micState === "blocked" && (
         <Button
           variant="secondary"
           size="sm"
