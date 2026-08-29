@@ -18,6 +18,7 @@ from app import models
 from app.database import Base, get_db
 from app.main import create_app
 from app.routers import auth
+from app.routers.evaluations import _calculate_total_score
 
 
 MIGRATION_PATH = (
@@ -258,6 +259,68 @@ class EvaluationsApiTest(unittest.TestCase):
         self.assertEqual(listed[completed.evaluation_id]["scores"], {"filler": {"score": 80}})
         self.assertIsNone(listed[legacy.evaluation_id]["question_strength"])
         self.assertIsNone(listed[legacy.evaluation_id]["turn_count"])
+
+
+class CalculateTotalScoreTest(unittest.TestCase):
+    def test_weighted_average_when_all_three_items_exist(self):
+        scores = {
+            "speaking_speed": {"score": 90},
+            "filler": {"score": 80},
+            "structure_content": {"score": 70},
+        }
+
+        self.assertEqual(_calculate_total_score(scores), 76)
+
+    def test_normalizes_by_remaining_weight_when_filler_is_missing(self):
+        scores = {
+            "speaking_speed": {"score": 90},
+            "structure_content": {"score": 70},
+        }
+
+        # 構成・内容60 : 話す速さ20 → 75% : 25% に正規化して計算する
+        self.assertEqual(_calculate_total_score(scores), 75)
+
+    def test_normalizes_by_remaining_weight_when_speaking_speed_is_missing(self):
+        scores = {
+            "filler": {"score": 80},
+            "structure_content": {"score": 70},
+        }
+
+        # 構成・内容60 : フィラー20 → 75% : 25% に正規化して計算する
+        self.assertEqual(_calculate_total_score(scores), 73)
+
+    def test_normalizes_by_remaining_weight_when_structure_content_is_missing(self):
+        scores = {
+            "speaking_speed": {"score": 90},
+            "filler": {"score": 80},
+        }
+
+        # フィラー20 : 話す速さ20 → 50% : 50% に正規化して計算する
+        self.assertEqual(_calculate_total_score(scores), 85)
+
+    def test_rounds_half_up_instead_of_bankers_rounding(self):
+        scores = {
+            "structure_content": {"score": 70},
+            "filler": {"score": 64},
+        }
+
+        # (70*3 + 64*1) / 4 = 68.5 → Python の round() だと 68（偶数丸め）になるが、
+        # 仕様どおり 0.5 は切り上げて 69 になることを確認する
+        self.assertEqual(_calculate_total_score(scores), 69)
+
+    def test_excludes_optional_pause_item(self):
+        scores = {
+            "speaking_speed": {"score": 90},
+            "filler": {"score": 80},
+            "structure_content": {"score": 70},
+            "pause": {"score": 0},
+        }
+
+        self.assertEqual(_calculate_total_score(scores), 76)
+
+    def test_returns_none_when_no_basic_item_exists(self):
+        self.assertIsNone(_calculate_total_score({}))
+        self.assertIsNone(_calculate_total_score({"pause": {"score": 50}}))
 
 
 if __name__ == "__main__":

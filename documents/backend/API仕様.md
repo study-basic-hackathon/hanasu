@@ -332,7 +332,7 @@ audio: <録音した音声 (webm/opus)>
   "turn_count": 1,
   "status": "completed",
   "created_at": "2026-08-16T14:32:00Z",
-  "total_score": 77,
+  "total_score": 75,
   "scores": {
     "speaking_speed":    { "score": 92, "value": 284, "unit": "文字/分" },
     "filler":            { "score": 67, "value": 2, "value_per_minute": 4.0, "unit": "回" },
@@ -357,7 +357,7 @@ audio: <録音した音声 (webm/opus)>
 
 - **状態は `processing` / `completed` / `failed` の3つ。** `completed` になるまでクライアントがポーリングする。**`failed` がないと、LLM が落ちたときフロントが永久にポーリングし続ける**
 - **`speaking_speed` / `filler` は `POST /evaluations` で受け取った値をそのまま返す。** `structure_content` と `advice` が LLM の出力
-- **`total_score` はバックエンドが算出する。** `speaking_speed` / `filler` / `structure_content` のうち存在するスコアを等価平均して四捨五入し、任意の `pause` は含めない（[評価仕様](../評価仕様.md) 5章）
+- **`total_score` はバックエンドが算出する。** `structure_content`（60%）/ `filler`（20%）/ `speaking_speed`（20%）のうち存在するスコアを加重平均して四捨五入し、任意の `pause` は含めない。欠測項目は存在する項目の重みだけで正規化する（[評価仕様](../評価仕様.md) 5章）
 - **合否の目安は返さない。** クライアントが `total_score` から判定する
 - **評価履歴からの詳細表示もこの API を使う**
 - **すべての状態で `company_id`、`company_name`、`question_strength`、`turn_count` を返す。** 既存評価結果は追加項目を `null` として返す
@@ -372,7 +372,7 @@ audio: <録音した音声 (webm/opus)>
       "evaluation_id": 87,
       "created_at": "2026-08-16T14:32:00Z",
       "status": "completed",
-      "total_score": 76,
+      "total_score": 75,
       "company_name": "株式会社テスト",
       "question_strength": "standard",
       "turn_count": 8,
@@ -440,6 +440,7 @@ audio: <録音した音声 (webm/opus)>
 - [ADR-0008 会話用APIの構成](../ADR/0008-会話用APIの構成.md) — API の分割とステートレス、非同期評価
 - [ADR-0009 評価方式](../ADR/0009-評価方式.md) — 評価指標と、定量 / 定性の分担
 - [ADR-0020 定量スコアの点数化基準](../ADR/0020-定量スコアの点数化基準.md) — 点数化と総合スコアの決定理由
+- [ADR-0023 総合スコアの加重平均](../ADR/0023-総合スコアの加重平均.md) — 総合スコアの合成比率を等価平均から加重平均へ置き換えた決定
 - [評価仕様](../評価仕様.md) — 定量スコアと総合スコアの計算規則
 - [ADR-0010 音声認識とLLMの基盤選定](../ADR/0010-音声認識とLLMの基盤選定.md) — STT は AmiVoice、LLM は Bedrock
 - [ADR-0011 会員登録と利用アカウント](../ADR/0011-会員登録と利用アカウント.md) — 会員登録を作らず固定の ID / パスワード1組を使う
