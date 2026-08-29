@@ -383,7 +383,7 @@ export function VoiceAnswerPanel({
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="relative flex flex-col items-center gap-3 rounded-card border border-line bg-[#fbfcfc] px-6 py-5">
+      <div className="relative flex flex-col items-center gap-3 px-6 py-5">
         <p
           aria-live="polite"
           className="rounded-card border border-line bg-surface px-4 py-2 text-body-sm text-ink-sub"
