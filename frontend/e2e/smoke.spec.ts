@@ -183,11 +183,14 @@ async function installFakeRecorder(page: Page) {
       stop() {
         if (this.state !== "recording") return;
         this.state = "inactive";
-        const data = new Blob(["synthetic recorded audio"], {
-          type: this.mimeType,
-        });
-        this.dispatchEvent(new BlobEvent("dataavailable", { data }));
-        this.dispatchEvent(new Event("stop"));
+        // ブラウザと同じく、dataavailable と stop は別のタスクで発火する
+        setTimeout(() => {
+          const data = new Blob(["synthetic recorded audio"], {
+            type: this.mimeType,
+          });
+          this.dispatchEvent(new BlobEvent("dataavailable", { data }));
+          this.dispatchEvent(new Event("stop"));
+        }, 0);
       }
     }
 

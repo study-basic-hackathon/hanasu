@@ -273,7 +273,11 @@ export function VoiceAnswerPanel({
     });
     recorder.addEventListener("stop", () => {
       if (segmentRef.current?.recorder === recorder) segmentRef.current = null;
-      if (discarded || disposedRef.current || exitSignal.aborted) return;
+      if (discarded || disposedRef.current || exitSignal.aborted) {
+        // 送らずに終わった区間で「送信中」のまま止まらないようにする
+        setSending(false);
+        return;
+      }
       sendSegment(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
     });
 
@@ -290,6 +294,9 @@ export function VoiceAnswerPanel({
   const closeSegment = useCallback(() => {
     const segment = segmentRef.current;
     if (!segment || segment.recorder.state !== "recording") return;
+    // stop イベントは次のタスクで届く。その前に「聞いていない」状態へ移るため、
+    // 送ると決めた区間はここで手放し、捨てる対象から外す
+    segmentRef.current = null;
     setHeard(false);
     setSilence(0);
     setSending(true);

@@ -54,9 +54,12 @@ class FakeMediaRecorder {
   stop() {
     if (this.state !== "recording") return;
     this.state = "inactive";
-    const data = new Blob(["recorded-audio"], { type: this.mimeType });
-    this.emit("dataavailable", { data } as BlobEvent);
-    this.emit("stop", new Event("stop"));
+    // ブラウザと同じく、dataavailable と stop は別のタスクで発火する
+    setTimeout(() => {
+      const data = new Blob(["recorded-audio"], { type: this.mimeType });
+      this.emit("dataavailable", { data } as BlobEvent);
+      this.emit("stop", new Event("stop"));
+    }, 0);
   }
 
   private emit(type: string, event: Event) {
@@ -173,6 +176,8 @@ describe("VoiceAnswerPanel の常時録音", () => {
     await advance(speakMs);
     inputLevel = 0;
     await advance(silenceMs);
+    // 区切ったあとの stop イベントは次のタスクで届く
+    await advance(50);
     await act(async () => {});
   }
 
@@ -257,7 +262,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
     expect(nextButton).toBeEnabled();
 
     fireEvent.click(nextButton);
-    await act(async () => {});
+    await advance(10);
 
     expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
     expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
