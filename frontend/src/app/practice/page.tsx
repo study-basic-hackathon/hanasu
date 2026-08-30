@@ -35,11 +35,8 @@ export default function PracticeMenuPage() {
       <SessionHeader
         title="練習モード"
         right={
-          <Link
-            href="/practice/setup?mode=practice"
-            className="text-label text-accent hover:underline"
-          >
-            設定に戻る
+          <Link href="/" className="text-label text-accent hover:underline">
+            ホームへ戻る
           </Link>
         }
       />

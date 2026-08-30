@@ -116,7 +116,7 @@ describe("EvaluationView のフィラー表示", () => {
 
     expect(screen.getByRole("link", { name: "再挑戦する" })).toHaveAttribute(
       "href",
-      "/practice/setup?mode=interview",
+      "/practice/setup",
     );
   });
 });

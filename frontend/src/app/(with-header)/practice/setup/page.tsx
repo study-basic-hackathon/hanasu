@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { TutorialStartDialog } from "@/components/interview/TutorialStartDialog";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -31,7 +31,8 @@ import {
   parseMaxTurns,
 } from "@/lib/interview";
 
-type Mode = "interview" | "practice";
+/** 企業追加・編集から戻ってくる先 */
+const SETUP_PATH = "/practice/setup";
 
 const STRENGTHS: QuestionStrength[] = [
   "easy",
@@ -55,33 +56,12 @@ function RadioMark({ selected }: { selected: boolean }) {
 }
 
 /**
- * S-05 本番・練習モードの設定。
- * 選んだ内容はサーバーに保存せず、S-08 / S-09 へ引き渡す（ADR-0008）。
- * 本番モードの選択内容はクエリ文字列で S-08 へ引き渡す。
+ * S-05 本番モードの設定。
+ * 選んだ内容はサーバーに保存せず、S-08 へクエリ文字列で引き渡す（ADR-0008）。
+ * 練習モードは設定する項目がないため、この画面を挟まず S-09 の練習メニューへ直接入る。
  */
 export default function PracticeSetupPage() {
-  return (
-    <Suspense
-      fallback={
-        <PageContainer width={960} className="text-body-sm text-ink-sub">
-          設定を読み込んでいます。
-        </PageContainer>
-      }
-    >
-      <PracticeSetupContent />
-    </Suspense>
-  );
-}
-
-function PracticeSetupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const modeValues = searchParams.getAll("mode");
-  const modeValue = modeValues.length === 1 ? modeValues[0] : null;
-  const mode: Mode | null =
-    modeValue === "interview" || modeValue === "practice"
-      ? modeValue
-      : null;
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod>("voice");
   const [readAloudMode, setReadAloudMode] = useState<ReadAloudMode>(
     DEFAULT_READ_ALOUD_MODE,
@@ -99,11 +79,6 @@ function PracticeSetupContent() {
   const [startingTutorial, setStartingTutorial] = useState(false);
 
   useEffect(() => {
-    if (mode === null) router.replace("/");
-  }, [mode, router]);
-
-  useEffect(() => {
-    if (mode === null) return;
     const controller = new AbortController();
     listCompanies(controller.signal)
       .then((loaded) => {
@@ -117,19 +92,9 @@ function PracticeSetupContent() {
         }
       });
     return () => controller.abort();
-  }, [mode]);
+  }, []);
 
-  if (mode === null) {
-    return (
-      <PageContainer width={960} className="text-body-sm text-ink-sub">
-        ホームへ戻っています。
-      </PageContainer>
-    );
-  }
-
-  const isPracticeMode = mode === "practice";
-  const setupPath = `/practice/setup?mode=${mode}`;
-  const encodedSetupPath = encodeURIComponent(setupPath);
+  const encodedSetupPath = encodeURIComponent(SETUP_PATH);
   const maxTurns = parseMaxTurns(maxTurnsInput);
   const maxTurnsError =
     maxTurns === null
@@ -146,10 +111,11 @@ function PracticeSetupContent() {
         : customQuestionStrengthLength > CUSTOM_QUESTION_STRENGTH_MAX_LENGTH
           ? `カスタムの質問強度は${CUSTOM_QUESTION_STRENGTH_MAX_LENGTH}文字以内で入力してください。`
           : null;
-  // 本番モードは対象企業が1つ選ばれていることが条件。練習モードは条件なし（S-05 5章）
+  // 対象企業が1つ選ばれていることが開始の条件（S-05 5章）
   const canStart =
     customQuestionStrengthError === null &&
-    (isPracticeMode || (companyId !== null && maxTurns !== null));
+    companyId !== null &&
+    maxTurns !== null;
   const selectedCompany = companies.find((company) => company.id === companyId);
   const confirmationItems: [string, string][] = [
     ["対象企業", selectedCompany?.company_name ?? "—"],
@@ -198,12 +164,8 @@ function PracticeSetupContent() {
   return (
     <PageContainer width={960} className="flex flex-col gap-[22px]">
       <div className="flex flex-col gap-1.5">
-        <span className="text-label text-ink-muted">
-          ホーム / {isPracticeMode ? "練習モード" : "本番モード"}
-        </span>
-        <h1 className="text-heading font-bold">
-          {isPracticeMode ? "練習モードの設定" : "本番モードの設定"}
-        </h1>
+        <span className="text-label text-ink-muted">ホーム / 本番モード</span>
+        <h1 className="text-heading font-bold">本番モードの設定</h1>
       </div>
 
       <div className="grid grid-cols-2 gap-[22px]">
@@ -309,84 +271,80 @@ function PracticeSetupContent() {
           </p>
         </Card>
 
-        {!isPracticeMode && (
-          <Card className="flex flex-col gap-3.5 px-[26px] py-6">
-            <h2 className="text-card-sm font-bold">最大ターン数</h2>
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                aria-label="最大ターン数を1減らす"
-                onClick={() => adjustMaxTurns(-1)}
-                className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
-              >
-                −
-              </button>
-              <input
-                id="max-turns"
-                type="number"
-                min={MIN_MAX_TURNS}
-                max={MAX_MAX_TURNS}
-                step={1}
-                inputMode="numeric"
-                aria-label="最大ターン数"
-                aria-invalid={maxTurnsError ? true : undefined}
-                aria-describedby={maxTurnsError ? "max-turns-error" : "max-turns-hint"}
-                value={maxTurnsInput}
-                onChange={(event) => setMaxTurnsInput(event.target.value)}
-                className={cn(
-                  "h-10 w-24 rounded-control border bg-surface px-3 text-center text-body outline-none focus:border-accent",
-                  maxTurnsError ? "border-danger" : "border-line-strong",
-                )}
-              />
-              <button
-                type="button"
-                aria-label="最大ターン数を1増やす"
-                onClick={() => adjustMaxTurns(1)}
-                className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
-              >
-                ＋
-              </button>
-              <span className="text-body-sm text-ink-sub">ターン</span>
-            </div>
-            {maxTurnsError ? (
-              <p id="max-turns-error" role="alert" className="text-note text-danger">
-                {maxTurnsError}
-              </p>
-            ) : (
-              <p id="max-turns-hint" className="text-note text-ink-muted">
-                {MIN_MAX_TURNS}〜{MAX_MAX_TURNS}ターンの範囲で設定できます。
-              </p>
-            )}
-          </Card>
-        )}
-
-        {!isPracticeMode && (
-          <Card className="flex flex-col gap-3.5 px-[26px] py-6">
-            <h2 className="text-card-sm font-bold">読み上げモード</h2>
-            <div className="flex overflow-hidden rounded-control border border-line-strong">
-              {READ_ALOUD_MODES.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
-                  aria-pressed={readAloudMode === value}
-                  onClick={() => setReadAloudMode(value)}
-                  className={cn(
-                    "h-btn-sm flex-1 text-body-sm",
-                    readAloudMode === value
-                      ? "bg-accent font-medium text-white"
-                      : "text-ink-label hover:bg-canvas",
-                  )}
-                >
-                  {READ_ALOUD_MODE_LABEL[value]}
-                </button>
-              ))}
-            </div>
-            <p className="text-note leading-[1.7] text-ink-muted">
-              面接中にも読み上げモードを変更できます。
+        <Card className="flex flex-col gap-3.5 px-[26px] py-6">
+          <h2 className="text-card-sm font-bold">最大ターン数</h2>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              aria-label="最大ターン数を1減らす"
+              onClick={() => adjustMaxTurns(-1)}
+              className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
+            >
+              −
+            </button>
+            <input
+              id="max-turns"
+              type="number"
+              min={MIN_MAX_TURNS}
+              max={MAX_MAX_TURNS}
+              step={1}
+              inputMode="numeric"
+              aria-label="最大ターン数"
+              aria-invalid={maxTurnsError ? true : undefined}
+              aria-describedby={maxTurnsError ? "max-turns-error" : "max-turns-hint"}
+              value={maxTurnsInput}
+              onChange={(event) => setMaxTurnsInput(event.target.value)}
+              className={cn(
+                "h-10 w-24 rounded-control border bg-surface px-3 text-center text-body outline-none focus:border-accent",
+                maxTurnsError ? "border-danger" : "border-line-strong",
+              )}
+            />
+            <button
+              type="button"
+              aria-label="最大ターン数を1増やす"
+              onClick={() => adjustMaxTurns(1)}
+              className="grid size-10 place-items-center rounded-control border border-line-strong text-body hover:bg-canvas"
+            >
+              ＋
+            </button>
+            <span className="text-body-sm text-ink-sub">ターン</span>
+          </div>
+          {maxTurnsError ? (
+            <p id="max-turns-error" role="alert" className="text-note text-danger">
+              {maxTurnsError}
             </p>
-          </Card>
-        )}
+          ) : (
+            <p id="max-turns-hint" className="text-note text-ink-muted">
+              {MIN_MAX_TURNS}〜{MAX_MAX_TURNS}ターンの範囲で設定できます。
+            </p>
+          )}
+        </Card>
+
+        <Card className="flex flex-col gap-3.5 px-[26px] py-6">
+          <h2 className="text-card-sm font-bold">読み上げモード</h2>
+          <div className="flex overflow-hidden rounded-control border border-line-strong">
+            {READ_ALOUD_MODES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={`読み上げモード: ${READ_ALOUD_MODE_LABEL[value]}`}
+                aria-pressed={readAloudMode === value}
+                onClick={() => setReadAloudMode(value)}
+                className={cn(
+                  "h-btn-sm flex-1 text-body-sm",
+                  readAloudMode === value
+                    ? "bg-accent font-medium text-white"
+                    : "text-ink-label hover:bg-canvas",
+                )}
+              >
+                {READ_ALOUD_MODE_LABEL[value]}
+              </button>
+            ))}
+          </div>
+          <p className="text-note leading-[1.7] text-ink-muted">
+            面接中にも読み上げモードを変更できます。
+          </p>
+        </Card>
       </div>
 
       <Card className="flex flex-col">
@@ -417,13 +375,7 @@ function PracticeSetupContent() {
             </Link>
           </div>
         ) : (
-          // 練習モードは応募企業情報を使わないため、選べない状態にする（S-05 5章）
-          <div
-            className={cn(
-              "flex flex-col",
-              isPracticeMode && "pointer-events-none opacity-50",
-            )}
-          >
+          <div className="flex flex-col">
             {companies.map((company) => {
               const selected = companyId === company.id;
               const sections = filledSections(company);
@@ -438,7 +390,6 @@ function PracticeSetupContent() {
                   <button
                     type="button"
                     aria-pressed={selected}
-                    disabled={isPracticeMode}
                     onClick={() => setCompanyId(company.id)}
                     className="flex flex-1 items-center gap-3.5 text-left"
                   >
@@ -482,21 +433,14 @@ function PracticeSetupContent() {
           先にチュートリアルを試す
         </button>
         <div className="flex items-center gap-3">
-          {/* 練習モード固定の画面では出さない（S-05 5章） */}
-          {!isPracticeMode && (
-            <span className="text-label text-ink-muted">
-              {maxTurns === null
-                ? "最大ターン数を確認してください"
-                : `上限 ${maxTurns} ターンで自動終了します`}
-            </span>
-          )}
+          <span className="text-label text-ink-muted">
+            {maxTurns === null
+              ? "最大ターン数を確認してください"
+              : `上限 ${maxTurns} ターンで自動終了します`}
+          </span>
           <Button
             disabled={!canStart}
             onClick={() => {
-              if (isPracticeMode) {
-                router.push("/practice");
-                return;
-              }
               if (
                 companyId === null ||
                 maxTurns === null ||
@@ -507,9 +451,7 @@ function PracticeSetupContent() {
             }}
             className="px-[34px]"
           >
-            {isPracticeMode
-              ? "練習モードを始める"
-              : "本番モードを始める"}
+            本番モードを始める
           </Button>
         </div>
       </div>

@@ -251,21 +251,22 @@ export default function HomePage() {
         )}
 
         <div className="flex flex-col gap-6">
-          {/* モードを決めてから S-05 へ進む主導線（S-04 3.3） */}
+          {/* モードを決めて S-05 / S-09 へ進む主導線（S-04 3.3） */}
           <div className="flex flex-col gap-3.5 rounded-card bg-accent p-[26px] text-white">
             <h2 className="text-card font-bold">面接・練習を始める</h2>
             <p className="text-label leading-[1.8] text-[#cde5e2]">
-              取り組むモードを選んで、設定へ進みます。
+              取り組むモードを選んでください。本番モードは設定へ、練習モードは練習メニューへ進みます。
             </p>
             <div className="mt-1 flex flex-col gap-2.5">
               <Link
-                href="/practice/setup?mode=interview"
+                href="/practice/setup"
                 className={buttonClassName("onAccent", "md", "w-full")}
               >
                 本番モードを始める
               </Link>
+              {/* 練習モードは設定する項目がないため S-09 へ直接進む */}
               <Link
-                href="/practice/setup?mode=practice"
+                href="/practice"
                 className="inline-flex h-btn w-full items-center justify-center rounded-control border border-white/70 px-5 text-body font-medium whitespace-nowrap text-white transition-colors hover:bg-white/10"
               >
                 練習モードを始める

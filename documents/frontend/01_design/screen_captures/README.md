@@ -21,7 +21,7 @@
 |---|---|---|
 | `01-S-01-signin.png` | S-01 サインイン | `/signin` |
 | `02-S-04-home.png` | S-04 ホーム | `/` |
-| `03-S-05-practice-setup.png` | S-05 本番モードの設定 | `/practice/setup?mode=interview` |
+| `03-S-05-practice-setup.png` | S-05 本番モードの設定 | `/practice/setup` |
 | `04-S-06-companies.png` | S-06 応募企業情報 一覧 | `/companies` |
 | `05-S-07-company-new.png` | S-07 新規登録 | `/companies/new` |
 | `06-S-07-company-edit.png` | S-07 編集 | `/companies/edit?id=1` |

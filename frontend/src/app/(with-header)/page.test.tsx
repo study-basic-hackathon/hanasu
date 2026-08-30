@@ -143,17 +143,17 @@ describe("HomePage のフィラー表示", () => {
     expect(scoreBar(row)).toBeEmptyDOMElement();
   });
 
-  it("本番モードと練習モードを固定する2つの開始導線を表示する", async () => {
+  it("本番モードは設定へ、練習モードは練習メニューへ進む導線を表示する", async () => {
     mocks.listEvaluations.mockResolvedValue([]);
 
     render(<HomePage />);
 
     expect(
       await screen.findByRole("link", { name: "本番モードを始める" }),
-    ).toHaveAttribute("href", "/practice/setup?mode=interview");
+    ).toHaveAttribute("href", "/practice/setup");
     expect(
       screen.getByRole("link", { name: "練習モードを始める" }),
-    ).toHaveAttribute("href", "/practice/setup?mode=practice");
+    ).toHaveAttribute("href", "/practice");
   });
 
   it("チュートリアルは方式を確認してから音声入力のページへ進む", async () => {

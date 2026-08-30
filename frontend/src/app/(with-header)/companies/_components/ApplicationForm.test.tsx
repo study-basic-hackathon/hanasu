@@ -280,7 +280,7 @@ describe("ApplicationForm", () => {
   });
 
   it("6項目を前後空白を除いて登録し、呼び出し元へ戻る", async () => {
-    render(<ApplicationForm returnTo="/practice/setup?mode=interview" />);
+    render(<ApplicationForm returnTo="/practice/setup" />);
 
     const values = {
       company_name: "  株式会社テスト  ",
@@ -307,18 +307,11 @@ describe("ApplicationForm", () => {
         job_summary: "募集要項の要約",
       }),
     );
-    expect(mocks.push).toHaveBeenCalledWith(
-      "/practice/setup?mode=interview",
-    );
+    expect(mocks.push).toHaveBeenCalledWith("/practice/setup");
   });
 
   it("募集要項の要約を手編集して更新する", async () => {
-    render(
-      <ApplicationForm
-        company={company}
-        returnTo="/practice/setup?mode=practice"
-      />,
-    );
+    render(<ApplicationForm company={company} returnTo="/companies" />);
 
     fireEvent.change(
       screen.getByRole("textbox", { name: "募集要項の要約" }),
@@ -332,8 +325,6 @@ describe("ApplicationForm", () => {
         expect.objectContaining({ job_summary: "編集後の募集要項の要約" }),
       ),
     );
-    expect(mocks.push).toHaveBeenCalledWith(
-      "/practice/setup?mode=practice",
-    );
+    expect(mocks.push).toHaveBeenCalledWith("/companies");
   });
 });
