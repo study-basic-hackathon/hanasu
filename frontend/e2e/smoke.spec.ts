@@ -142,6 +142,12 @@ async function mockApi(page: Page) {
         ],
       });
     }
+    if (
+      (pathname === "/evaluations/87" || pathname === "/evaluations/88") &&
+      request.method() === "DELETE"
+    ) {
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (pathname === "/evaluations/87") {
       return fulfillJson(route, evaluation);
     }
@@ -488,6 +494,90 @@ test("評価の再挑戦は本番設定、履歴0件の導線はホームを開�
   await expect(page).toHaveURL(/\/$/);
 });
 
+test("S-16 は行のどこからでも開き、削除は遷移させずに確認を出す", async ({
+  page,
+}) => {
+  await page.goto("/evaluations");
+  const row = page.locator('[data-evaluation-id="88"]');
+
+  // 「開く」から離れた行の左端を押しても S-14 へ行く（S-16 6章）。
+  // リンクの擬似要素が行全体を覆っているため、行のどこを押してもリンクに当たる
+  await row.click({ position: { x: 40, y: 20 } });
+  await expect(page).toHaveURL(/\/evaluations\/detail\?id=88$/);
+
+  await page.goto("/evaluations");
+  await row.getByRole("button", { name: /削除/ }).click();
+
+  // 削除は行のリンクの手前に重ねてあるので、押しても遷移しない（S-16 6.1）
+  await expect(page).toHaveURL(/\/evaluations$/);
+  await expect(
+    page.getByText(
+      /2026-08-2\d .+ の 株式会社アルファテック の結果を削除します。元に戻せません。/,
+    ),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "取り消す" }).click();
+  await expect(row).toBeVisible();
+});
+
+test("S-16 で履歴を削除すると、その行だけが消えて一覧を取り直さない", async ({
+  page,
+}) => {
+  let listRequests = 0;
+  await page.route("http://localhost:8000/evaluations", async (route) => {
+    if (route.request().method() === "GET") listRequests += 1;
+    return route.fallback();
+  });
+
+  await page.goto("/evaluations");
+  await expect(page.locator("[data-evaluation-id]")).toHaveCount(2);
+
+  const deleted = page.locator('[data-evaluation-id="88"]');
+  await deleted.getByRole("button", { name: /削除/ }).click();
+
+  const request = page.waitForRequest(
+    (candidate) =>
+      candidate.url().endsWith("/evaluations/88") &&
+      candidate.method() === "DELETE",
+  );
+  await page.getByRole("button", { name: "削除する" }).click();
+  await request;
+
+  await expect(deleted).toHaveCount(0);
+  await expect(page.locator('[data-evaluation-id="87"]')).toBeVisible();
+  await expect(
+    page.getByText(
+      /2026-08-2\d .+ の 株式会社アルファテック の結果を削除しました。/,
+    ),
+  ).toBeVisible();
+  expect(listRequests).toBe(1);
+});
+
+test("S-16 の削除に失敗したら、行を残したまま確認を閉じて知らせる", async ({
+  page,
+}) => {
+  await page.route("http://localhost:8000/evaluations/88", async (route) => {
+    if (route.request().method() === "DELETE") {
+      return fulfillJson(route, { detail: "内部エラー" }, 500);
+    }
+    return route.fallback();
+  });
+
+  await page.goto("/evaluations");
+  const row = page.locator('[data-evaluation-id="88"]');
+  await row.getByRole("button", { name: /削除/ }).click();
+  await page.getByRole("button", { name: "削除する" }).click();
+
+  // 確認を閉じてから、一覧の上部に赤字で1行出す（共通仕様 7.2）
+  // Next のルートアナウンサーも role="alert" を持つため、一覧の1行に絞る
+  await expect(page.locator('p[role="alert"]')).toHaveText(
+    "削除できませんでした。時間をおいてもう一度お試しください。",
+  );
+  await expect(page.getByRole("button", { name: "削除する" })).toHaveCount(0);
+  await expect(row).toBeVisible();
+  await expect(page.locator("[data-evaluation-id]")).toHaveCount(2);
+});
+
 test("静的な詳細 URL から企業編集と評価結果を表示できる", async ({ page }) => {
   await page.goto("/companies/edit?id=1");
 
@@ -607,9 +697,7 @@ test("文字回答から chat と評価 API を呼び評価結果へ遷移でき
   await expect(page.getByText("計測対象外")).toHaveCount(2);
 
   await page.goto("/evaluations");
-  const textEvaluationRow = page.locator(
-    'a[href="/evaluations/detail?id=88"]',
-  );
+  const textEvaluationRow = page.locator('[data-evaluation-id="88"]');
   const scoreTracks = textEvaluationRow.locator(".bg-track");
   await expect(scoreTracks).toHaveCount(3);
   await expect(scoreTracks.nth(0).locator(":scope > div")).toHaveCount(0);

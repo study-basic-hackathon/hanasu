@@ -6,15 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { buttonClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DateTime } from "@/components/ui/DateTime";
 import { cn } from "@/lib/cn";
 import type { Evaluation } from "@/lib/domain";
 import { QUESTION_STRENGTH_LABEL } from "@/lib/domain";
-import { listEvaluations } from "@/lib/evaluation-api";
-import { formatCount } from "@/lib/format";
+import { deleteEvaluation, listEvaluations } from "@/lib/evaluation-api";
+import { formatCount, formatDateTime } from "@/lib/format";
 import { SCORE_BAR_CLASS, scoreLevel, scorePercent } from "@/lib/score";
 
-const COLUMNS = "grid-cols-[180px_1fr_110px_320px_90px]";
+const COLUMNS = "grid-cols-[180px_1fr_110px_300px_120px]";
 
 /** 絞り込みの選択肢。すべて / 企業ごと / チュートリアル（S-16 4章） */
 type FilterKey = "all" | "tutorial" | `company:${string}`;
@@ -23,6 +24,12 @@ function filterKeyOf(evaluation: Evaluation): FilterKey {
   return evaluation.company_name === null
     ? "tutorial"
     : `company:${evaluation.company_name}`;
+}
+
+/** 確認・完了の文面で結果を指し示す言い方（S-16 6.1） */
+function evaluationLabel(evaluation: Evaluation): string {
+  const target = evaluation.company_name ?? "チュートリアル";
+  return `${formatDateTime(evaluation.created_at)} の ${target}`;
 }
 
 /** 項目別スコアの3本のバー。数値は出さない（S-16 5章） */
@@ -75,6 +82,11 @@ export default function EvaluationsPage() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Evaluation | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // 削除の失敗・完了は読み込みの error とは別に持つ。error は画面ごと差し替えるため流用できない
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -129,6 +141,34 @@ export default function EvaluationsPage() {
         : a.created_at.localeCompare(b.created_at),
     );
   }, [evaluations, filter, newestFirst]);
+
+  async function handleDelete() {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteEvaluation(pendingDelete.evaluation_id);
+      const remaining = evaluations.filter(
+        (evaluation) => evaluation.evaluation_id !== pendingDelete.evaluation_id,
+      );
+      // 一覧は画面側で除くだけにして API は呼び直さない（S-16 6章）
+      setEvaluations(remaining);
+      // 絞り込み中の企業の最後の1件だったら選択肢ごと消えるので、すべての企業に戻す（S-16 4章）
+      if (
+        filter !== "all" &&
+        !remaining.some((evaluation) => filterKeyOf(evaluation) === filter)
+      ) {
+        setFilter("all");
+      }
+      setDeletedLabel(evaluationLabel(pendingDelete));
+    } catch {
+      setDeleteError("削除できませんでした。時間をおいてもう一度お試しください。");
+    } finally {
+      // 失敗しても閉じる。開いたままだと一覧の上の赤字が backdrop に隠れる（共通仕様 7.2）
+      setPendingDelete(null);
+      setDeleting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -195,6 +235,22 @@ export default function EvaluationsPage() {
         </select>
       </div>
 
+      {/* 削除の結果は一覧カードの上部に出す（共通仕様 7.2 / S-16 6.1） */}
+      {deletedLabel && (
+        <p className="rounded-control border border-accent/30 bg-accent-soft px-4 py-3 text-body-sm text-accent">
+          {deletedLabel} の結果を削除しました。
+        </p>
+      )}
+
+      {deleteError && (
+        <p
+          role="alert"
+          className="rounded-control border border-danger/30 bg-danger/5 px-4 py-3 text-body-sm text-danger"
+        >
+          {deleteError}
+        </p>
+      )}
+
       {total === 0 ? (
         <Card className="flex flex-col items-start gap-5 px-6 py-10">
           <p className="text-body-sm text-ink-sub">
@@ -222,13 +278,13 @@ export default function EvaluationsPage() {
             <span>対象企業 / 種別</span>
             <span>総合スコア</span>
             <span>項目別（速さ / フィラー / 構成）</span>
-            <span />
+            <span className="text-right">操作</span>
           </div>
           {rows.map((evaluation) => (
-            <Link
+            <div
               key={evaluation.evaluation_id}
-              href={`/evaluations/detail?id=${evaluation.evaluation_id}`}
-              className={`grid ${COLUMNS} items-center border-b border-divider px-6 py-4 text-body-sm last:border-b-0 hover:bg-accent-soft`}
+              data-evaluation-id={evaluation.evaluation_id}
+              className={`relative grid ${COLUMNS} items-center border-b border-divider px-6 py-4 text-body-sm last:border-b-0 hover:bg-accent-soft`}
             >
               <DateTime
                 value={evaluation.created_at}
@@ -255,11 +311,46 @@ export default function EvaluationsPage() {
               </div>
               <TotalScoreCell evaluation={evaluation} />
               <ScoreBars evaluation={evaluation} />
-              <span className="text-right text-label text-accent">開く</span>
-            </Link>
+              <div className="flex items-center justify-end gap-3.5 text-label">
+                {/* 擬似要素で行全体を覆い、行のどこを押しても開けるようにする（S-16 6章） */}
+                <Link
+                  href={`/evaluations/detail?id=${evaluation.evaluation_id}`}
+                  className="text-accent after:absolute after:inset-0 after:content-['']"
+                >
+                  開く
+                </Link>
+                {/* 削除は行のリンクより手前に重ね、押しても S-14 へ遷移させない（S-16 6.1） */}
+                <button
+                  type="button"
+                  aria-label={`${evaluationLabel(evaluation)} の結果を削除`}
+                  onClick={() => {
+                    setDeletedLabel(null);
+                    setDeleteError(null);
+                    setPendingDelete(evaluation);
+                  }}
+                  className="relative z-10 text-danger hover:underline"
+                >
+                  削除
+                </button>
+              </div>
+            </div>
           ))}
         </Card>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        message={
+          pendingDelete
+            ? `${evaluationLabel(pendingDelete)} の結果を削除します。元に戻せません。`
+            : ""
+        }
+        confirmLabel="削除する"
+        busy={deleting}
+        busyLabel="削除しています"
+        onConfirm={handleDelete}
+        onCancel={() => !deleting && setPendingDelete(null)}
+      />
     </PageContainer>
   );
 }

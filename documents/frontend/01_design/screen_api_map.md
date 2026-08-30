@@ -65,6 +65,7 @@
 | S-14 | | | 評価をやり直す（`failed` のとき） | `POST /evaluations`（**S-08 から続けて開いたときのみ**） |
 | S-16 | 履歴一覧 | 作る | 画面表示 | `GET /evaluations`（全件。**チュートリアルの結果も含まれる**） |
 | S-16 | | | 結果を開く | `GET /evaluations/{evaluation_id}` |
+| S-16 | | | 結果を削除する | `DELETE /evaluations/{evaluation_id}`（**成功したら画面側で行を除く。一覧は取り直さない**） |
 
 **S-02 / S-15 は欠番のため本表に現れない**（[画面一覧](screen_list.md)）。
 
