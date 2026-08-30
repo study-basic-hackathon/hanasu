@@ -343,7 +343,7 @@ test("主要ページをグローバルナビゲーションで移動できる",
   ).toBeVisible();
 });
 
-test("ホームでモードを選び、設定・企業編集・開始・戻り先までモードを維持する", async ({
+test("ホームでモードを選び、本番は設定・企業編集・開始、練習は練習メニューへ進む", async ({
   page,
 }) => {
   await page.goto("/");
@@ -354,41 +354,26 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   const practiceLink = page.getByRole("link", {
     name: "練習モードを始める",
   });
-  await expect(interviewLink).toHaveAttribute(
-    "href",
-    "/practice/setup?mode=interview",
-  );
-  await expect(practiceLink).toHaveAttribute(
-    "href",
-    "/practice/setup?mode=practice",
-  );
+  await expect(interviewLink).toHaveAttribute("href", "/practice/setup");
+  await expect(practiceLink).toHaveAttribute("href", "/practice");
 
   await interviewLink.click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(page).toHaveURL(/\/practice\/setup$/);
   await expect(
     page.getByRole("heading", { name: "本番モードの設定" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "練習モード" })).toHaveCount(
-    0,
-  );
 
   await page.getByRole("link", { name: "企業を追加" }).click();
   const newCompanyCancel = page.getByRole("link", { name: "取り消す" });
-  await expect(newCompanyCancel).toHaveAttribute(
-    "href",
-    "/practice/setup?mode=interview",
-  );
+  await expect(newCompanyCancel).toHaveAttribute("href", "/practice/setup");
   await newCompanyCancel.click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(page).toHaveURL(/\/practice\/setup$/);
 
   await page.getByRole("link", { name: "編集" }).click();
   const editCompanyCancel = page.getByRole("link", { name: "取り消す" });
-  await expect(editCompanyCancel).toHaveAttribute(
-    "href",
-    "/practice/setup?mode=interview",
-  );
+  await expect(editCompanyCancel).toHaveAttribute("href", "/practice/setup");
   await editCompanyCancel.click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(page).toHaveURL(/\/practice\/setup$/);
 
   await page.getByRole("button", { name: company.company_name }).click();
   await page.getByRole("button", { name: "本番モードを始める" }).click();
@@ -399,7 +384,7 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
   await expect(startDialog).toContainText(/最大ターン数\s*10 ターン/);
   await expect(startDialog).toContainText(/読み上げモード\s*読み上げる/);
   await startDialog.getByRole("button", { name: "取り消す" }).click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(page).toHaveURL(/\/practice\/setup$/);
   await expect(
     page.getByRole("button", { name: company.company_name }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -411,21 +396,14 @@ test("ホームでモードを選び、設定・企業編集・開始・戻り�
     .click();
   await expect(page).toHaveURL(/\/interview\/voice\?.*companyId=1.*readAloud=enabled/);
 
+  // 練習モードは設定を挟まず練習メニューへ入り、そこからホームへ戻れる
   await page.goto("/");
   await page.getByRole("link", { name: "練習モードを始める" }).click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=practice$/);
-  await expect(
-    page.getByRole("heading", { name: "練習モードの設定" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("spinbutton", { name: "最大ターン数" }),
-  ).toHaveCount(0);
-  await page.getByRole("button", { name: "練習モードを始める" }).click();
   await expect(page).toHaveURL(/\/practice$/);
-  await page.getByRole("link", { name: "設定に戻る" }).click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=practice$/);
-
-  await page.goto("/practice/setup?mode=invalid");
+  await expect(
+    page.getByRole("heading", { name: "練習メニュー" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "ホームへ戻る" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "ホーム" })).toBeVisible();
 });
@@ -447,7 +425,7 @@ test("カスタム質問強度を設定から引き継ぎ、会話APIへ毎タ�
     return fulfillJson(route, { text: `カスタム質問${chatRequestCount}です。` });
   });
 
-  await page.goto("/practice/setup?mode=interview");
+  await page.goto("/practice/setup");
   await page.getByRole("button", { name: "カスタム" }).click();
   const customInput = page.getByRole("textbox", {
     name: "カスタムの質問強度",
@@ -486,12 +464,12 @@ test("カスタム質問強度を設定から引き継ぎ、会話APIへ毎タ�
   expect(chatRequestCount).toBe(2);
 });
 
-test("評価の再挑戦は本番設定、モード未確定の履歴0件導線はホームを開く", async ({
+test("評価の再挑戦は本番設定、履歴0件の導線はホームを開く", async ({
   page,
 }) => {
   await page.goto("/evaluations/detail?id=87");
   await page.getByRole("link", { name: "再挑戦する" }).click();
-  await expect(page).toHaveURL(/\/practice\/setup\?mode=interview$/);
+  await expect(page).toHaveURL(/\/practice\/setup$/);
 
   await page.route("http://localhost:8000/evaluations", async (route) => {
     if (route.request().method() === "GET") {
@@ -531,7 +509,7 @@ test("S-05〜S-07で応募企業情報を6項目として表示・検証・編�
   await expect(page.getByText("企業名", { exact: true })).toBeVisible();
   await expect(page.getByText("企業名 / 職種", { exact: true })).toHaveCount(0);
 
-  await page.goto("/practice/setup?mode=interview");
+  await page.goto("/practice/setup");
   await expect(
     page.getByText("募集要項 / 志望動機 / 経歴", { exact: true }),
   ).toBeVisible();
@@ -873,7 +851,7 @@ test("S-03 の音声回答で STT 全計測値と raw transcript を評価へ渡
 });
 
 test("設定画面で最大ターン数を1〜25の整数として設定できる", async ({ page }) => {
-  await page.goto("/practice/setup?mode=interview");
+  await page.goto("/practice/setup");
 
   const input = page.getByRole("spinbutton", { name: "最大ターン数" });
   const startButton = page.getByRole("button", {
