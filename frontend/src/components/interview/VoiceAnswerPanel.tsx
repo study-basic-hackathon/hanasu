@@ -46,6 +46,17 @@ function preferredMimeType(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+/** マイクを開く。使えない環境も拒否と同じ「開けなかった」に寄せる */
+async function openMicrophoneStream(): Promise<MediaStream> {
+  if (
+    !navigator.mediaDevices?.getUserMedia ||
+    typeof MediaRecorder === "undefined"
+  ) {
+    throw new Error("この環境ではマイクを使えません");
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: true });
+}
+
 function transcriptionFailureMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) {
@@ -106,6 +117,7 @@ export function VoiceAnswerPanel({
   const sttControllerRef = useRef<AbortController | null>(null);
   const disposedRef = useRef(false);
   const noticeTimerRef = useRef<number | null>(null);
+  const micRequestRef = useRef(0);
 
   const hasExited = exitSignal.aborted;
   // 面接官の番、ミュート、終了のあいだはマイクを止める
@@ -161,25 +173,31 @@ export function VoiceAnswerPanel({
     return () => exitSignal.removeEventListener("abort", discardTemporaryState);
   }, [discardTemporaryState, exitSignal]);
 
-  // マイクは画面を開いたときに一度だけ取得し、面接のあいだ持ち続ける
+  const clearNotice = useCallback(() => {
+    if (noticeTimerRef.current !== null) {
+      window.clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
+    }
+    setNotice(null);
+  }, []);
+
+  /**
+   * マイクは画面を開いたときに取得し、面接のあいだ持ち続ける。
+   * あわせてブラウザ側の許可の変化を見張り、ブロックと再許可にリロードなしで追いつく
+   */
   useEffect(() => {
     disposedRef.current = false;
-    let cancelled = false;
+    let permissionStatus: PermissionStatus | null = null;
+    let unsubscribed = false;
 
+    /** 取り直しが重なっても最後の要求だけを採るため、要求ごとに番号を振る */
     async function acquireMicrophone() {
-      if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === "undefined"
-      ) {
-        setMicState("blocked");
-        setNotice(MIC_UNAVAILABLE_MESSAGE);
-        return;
-      }
+      const request = ++micRequestRef.current;
+      const stale = () =>
+        disposedRef.current || micRequestRef.current !== request;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        if (cancelled || disposedRef.current) {
+        const stream = await openMicrophoneStream();
+        if (stale()) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -192,17 +210,51 @@ export function VoiceAnswerPanel({
         analyserRef.current = analyser;
         setMicState("ready");
       } catch {
-        if (cancelled || disposedRef.current) return;
+        if (stale()) return;
         setMicState("blocked");
         setNotice(MIC_UNAVAILABLE_MESSAGE);
       }
     }
 
+    function handlePermissionChange() {
+      if (disposedRef.current || permissionStatus === null) return;
+      if (permissionStatus.state === "denied") {
+        // 取り上げられたマイクは掴んだままにせず、使えない状態として示す
+        micRequestRef.current += 1;
+        discardSegment();
+        releaseAudio();
+        setMicState("blocked");
+        setNotice(MIC_UNAVAILABLE_MESSAGE);
+        return;
+      }
+      // 許可が戻ったので取り直す。すでに掴めているならそのまま使い続ける
+      if (streamRef.current !== null) return;
+      setMicState("requesting");
+      clearNotice();
+      void acquireMicrophone();
+    }
+
     void acquireMicrophone();
 
+    const permissions = navigator.permissions;
+    if (permissions?.query) {
+      void permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((status) => {
+          if (unsubscribed || disposedRef.current) return;
+          permissionStatus = status;
+          status.addEventListener("change", handlePermissionChange);
+        })
+        // マイクの権限を照会できないブラウザでは、変化への追従をあきらめる
+        .catch(() => {});
+    }
+
     return () => {
-      cancelled = true;
+      unsubscribed = true;
+      permissionStatus?.removeEventListener("change", handlePermissionChange);
       disposedRef.current = true;
+      // 取得の途中だった要求は、戻ってきても掴まずに捨てさせる
+      micRequestRef.current += 1;
       if (noticeTimerRef.current !== null) {
         window.clearTimeout(noticeTimerRef.current);
         noticeTimerRef.current = null;
@@ -212,7 +264,7 @@ export function VoiceAnswerPanel({
       discardSegment();
       releaseAudio();
     };
-  }, [discardSegment, releaseAudio]);
+  }, [clearNotice, discardSegment, releaseAudio]);
 
   const sendSegment = useCallback(
     (audio: Blob) => {
