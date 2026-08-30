@@ -232,8 +232,14 @@ async function installFakeRecorder(page: Page) {
       configurable: true,
       value: {
         getUserMedia: async () => {
-          const track = { enabled: true, stop() {} };
+          // アプリはトラックの終了を見張るため、実物と同じく通知を受けられる形にする
+          const track = Object.assign(new EventTarget(), {
+            enabled: true,
+            readyState: "live",
+            stop() {},
+          });
           return {
+            active: true,
             getTracks: () => [track],
             getAudioTracks: () => [track],
           };

@@ -110,6 +110,8 @@ export function InterviewScreen({
     !isTutorial && Number.isSafeInteger(configuredCompanyId) && configuredCompanyId > 0
       ? configuredCompanyId
       : null;
+  // 対象企業が決まらない本番モードは画面自体を出せない。読み上げなどの副作用も走らせない
+  const missingCompany = !isTutorial && companyId === null;
   const configuredQuestionStrength = questionStrengthOf(
     searchParams.get("strength"),
   );
@@ -275,6 +277,7 @@ export function InterviewScreen({
   // 最初の質問だけは会話 API を経由しないため、ここで読み上げを始める
   useEffect(() => {
     if (
+      missingCompany ||
       configuredReadAloudMode !== "enabled" ||
       initialAutoSpeechStartedRef.current
     ) {
@@ -292,7 +295,7 @@ export function InterviewScreen({
     return () => {
       cancelled = true;
     };
-  }, [configuredReadAloudMode, isTutorial, startSpeech]);
+  }, [configuredReadAloudMode, isTutorial, missingCompany, startSpeech]);
 
   /**
    * 新しい離脱導線で共有する終了処理。確認の確定後に一度だけ実行し、
@@ -512,7 +515,7 @@ export function InterviewScreen({
     if (finishInterview()) router.push("/");
   }, [canEnd, finishInterview, router]);
 
-  if (!isTutorial && companyId === null) {
+  if (missingCompany) {
     return (
       <div className="grid min-h-dvh place-items-center text-body-sm text-danger">
         対象企業が指定されていません。練習の設定から開始してください。
