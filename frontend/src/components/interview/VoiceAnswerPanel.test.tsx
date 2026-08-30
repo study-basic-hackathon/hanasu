@@ -35,9 +35,11 @@ class FakeMediaRecorder {
 
   readonly mimeType: string;
   state: RecordingState = "inactive";
+  private readonly stream: MediaStream;
   private readonly listeners = new Map<string, Listener[]>();
 
-  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+  constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+    this.stream = stream;
     this.mimeType = options?.mimeType ?? "audio/webm";
     FakeMediaRecorder.instances.push(this);
   }
@@ -48,6 +50,10 @@ class FakeMediaRecorder {
   }
 
   start() {
+    // 権限が切れて非アクティブになった MediaStream には、実ブラウザも例外を投げる
+    if (!this.stream.active) {
+      throw new DOMException("stream is inactive", "InvalidStateError");
+    }
     this.state = "recording";
   }
 
@@ -79,6 +85,28 @@ class DeferredStopMediaRecorder extends FakeMediaRecorder {
       this.emit("dataavailable", { data } as BlobEvent);
       this.emit("stop", new Event("stop"));
     }, 0);
+  }
+}
+
+/** enabled の切り替えと、権限が切れたときの ended 通知だけを持つトラック */
+class FakeMediaStreamTrack extends EventTarget {
+  enabled = true;
+  readyState: MediaStreamTrackState = "live";
+
+  constructor(private readonly onStop: () => void) {
+    super();
+  }
+
+  stop() {
+    this.readyState = "ended";
+    this.onStop();
+  }
+}
+
+/** 権限の取り消しがトラックへ伝わる前に、開始だけが失敗するブラウザの挙動 */
+class FailingStartMediaRecorder extends FakeMediaRecorder {
+  start(): never {
+    throw new DOMException("cannot start", "InvalidStateError");
   }
 }
 
@@ -124,7 +152,16 @@ type PanelOptions = {
 describe("VoiceAnswerPanel の常時録音", () => {
   const trackStop = vi.fn();
   const getUserMedia = vi.fn();
-  let track: { enabled: boolean; stop: () => void };
+  let track: FakeMediaStreamTrack;
+
+  /**
+   * ブラウザ設定でマイクを止められた状態を作る。
+   * 実ブラウザではトラックが ended になり、MediaStream も非アクティブになる
+   */
+  function revokeMicrophone(notifies = true) {
+    track.readyState = "ended";
+    if (notifies) track.dispatchEvent(new Event("ended"));
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,10 +169,13 @@ describe("VoiceAnswerPanel の常時録音", () => {
     vi.setSystemTime(0);
     FakeMediaRecorder.instances = [];
     inputLevel = 0;
-    track = { enabled: true, stop: trackStop };
+    track = new FakeMediaStreamTrack(trackStop);
     getUserMedia.mockResolvedValue({
       getTracks: () => [track],
       getAudioTracks: () => [track],
+      get active() {
+        return track.readyState === "live";
+      },
     } as unknown as MediaStream);
     mocks.transcribeAudio.mockResolvedValue(transcription);
     Object.defineProperty(navigator, "mediaDevices", {
@@ -482,6 +522,68 @@ describe("VoiceAnswerPanel の常時録音", () => {
       expect.objectContaining({ rawContent: "%えー% 回答です。" }),
     );
     expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+  });
+
+  it("読み上げのあいだにマイクの権限が切れても、落ちずにマイクを使えない案内へ移る", async () => {
+    const { rerender } = await renderPanel();
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+
+    // 面接官の番のうちに設定で止められる。ended の通知が届かない経路を通す
+    rerender({ interviewerSpeaking: true });
+    revokeMicrophone(false);
+
+    // 読み上げが終わると次の区間を録り始めようとして、録音の開始に失敗する
+    rerender({ interviewerSpeaking: false });
+    await act(async () => {});
+
+    expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "マイクが使えなくなりました。ブラウザの設定で許可し直すか、文字入力モードで始め直してください。",
+    );
+    // 使えないトラックで録り直しにいかない
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
+    expect(
+      screen.getByRole("button", { name: "文字入力モードで始め直す" }),
+    ).toBeInTheDocument();
+  });
+
+  it("トラックが生きて見えても録音を開始できなければ、落ちずに案内へ移る", async () => {
+    const { rerender } = await renderPanel();
+
+    // 権限の取り消しがトラックへ伝わる前に、開始だけが失敗する状態を作る
+    vi.stubGlobal("MediaRecorder", FailingStartMediaRecorder);
+    rerender({ interviewerSpeaking: true });
+    rerender({ interviewerSpeaking: false });
+    await act(async () => {});
+
+    expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "マイクが使えなくなりました。",
+    );
+  });
+
+  it("マイクの権限が切れた通知を受けたら、その場で聞くのをやめて案内へ移る", async () => {
+    const onSubmit = vi.fn();
+    const { rerender } = await renderPanel({ onSubmit });
+
+    rerender({ interviewerSpeaking: true });
+    await act(async () => {
+      revokeMicrophone();
+    });
+
+    expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
+    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
+
+    // 読み上げが終わっても録音は再開せず、案内を出したままにする
+    rerender({ interviewerSpeaking: false });
+    await act(async () => {});
+    await speakThenPause();
+
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
   });
 
   it("使い方を求められたら常時録音の約束ごとを示す", async () => {

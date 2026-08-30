@@ -29,6 +29,10 @@ type Segment = {
 const MIC_UNAVAILABLE_MESSAGE =
   "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。";
 
+/** 面接の途中で権限を落とされたとき。取得できなかったときと言い分けて気づけるようにする */
+const MIC_LOST_MESSAGE =
+  "マイクが使えなくなりました。ブラウザの設定で許可し直すか、文字入力モードで始め直してください。";
+
 const HELP_TEXT =
   "面接のあいだ、マイクはつけたままです。話し終えて少し黙ると、そこまでを回答として送ります。待たずに送りたいときは「次の質問へ」を押してください。面接官が話しているあいだと、返事を待っているあいだはマイクを止めます。読み上げを最後まで聞かずに答えたいときは「質問に答える」を押してください。";
 
@@ -44,6 +48,19 @@ function preferredMimeType(): string | undefined {
     "audio/ogg;codecs=opus",
   ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+/**
+ * まだ録音に使える MediaStream か。ブラウザの設定でマイクを止められると
+ * トラックが ended になり、この状態で MediaRecorder を開始すると例外になる
+ */
+function isUsableStream(stream: MediaStream): boolean {
+  const tracks = stream.getAudioTracks();
+  return (
+    stream.active !== false &&
+    tracks.length > 0 &&
+    tracks.some((track) => track.readyState !== "ended")
+  );
 }
 
 function transcriptionFailureMessage(error: unknown): string {
@@ -155,6 +172,19 @@ export function VoiceAnswerPanel({
     setNotice(null);
   }, [discardSegment, releaseAudio]);
 
+  /**
+   * 面接の途中でマイクを取り上げられたときの後始末。
+   * 録音を止めて「マイクを使えません」の案内へ移し、聞き直そうとしないようにする
+   */
+  const loseMicrophone = useCallback(() => {
+    // 一度きりの移行にする。取得そのものに失敗したときの案内も上書きしない
+    if (disposedRef.current || !streamRef.current) return;
+    discardSegment();
+    releaseAudio();
+    setMicState("blocked");
+    setNotice(MIC_LOST_MESSAGE);
+  }, [discardSegment, releaseAudio]);
+
   useEffect(() => {
     if (exitSignal.aborted) return;
     exitSignal.addEventListener("abort", discardTemporaryState);
@@ -165,6 +195,7 @@ export function VoiceAnswerPanel({
   useEffect(() => {
     disposedRef.current = false;
     let cancelled = false;
+    let watchedTracks: MediaStreamTrack[] = [];
 
     async function acquireMicrophone() {
       if (
@@ -190,6 +221,12 @@ export function VoiceAnswerPanel({
         streamRef.current = stream;
         audioContextRef.current = audioContext;
         analyserRef.current = analyser;
+        // ブラウザの設定で許可を取り消されるとトラックが終わる。
+        // 次に録り始めようとして落ちる前に、ここで気づいて案内へ移す
+        watchedTracks = stream.getAudioTracks();
+        watchedTracks.forEach((track) =>
+          track.addEventListener("ended", loseMicrophone),
+        );
         setMicState("ready");
       } catch {
         if (cancelled || disposedRef.current) return;
@@ -203,6 +240,10 @@ export function VoiceAnswerPanel({
     return () => {
       cancelled = true;
       disposedRef.current = true;
+      watchedTracks.forEach((track) =>
+        track.removeEventListener("ended", loseMicrophone),
+      );
+      watchedTracks = [];
       if (noticeTimerRef.current !== null) {
         window.clearTimeout(noticeTimerRef.current);
         noticeTimerRef.current = null;
@@ -212,7 +253,7 @@ export function VoiceAnswerPanel({
       discardSegment();
       releaseAudio();
     };
-  }, [discardSegment, releaseAudio]);
+  }, [discardSegment, loseMicrophone, releaseAudio]);
 
   const sendSegment = useCallback(
     (audio: Blob) => {
@@ -255,12 +296,20 @@ export function VoiceAnswerPanel({
   const startSegment = useCallback(() => {
     const stream = streamRef.current;
     if (!stream || segmentRef.current) return;
+    // 終わったトラックで録り始めると例外になる。案内へ移して録音はあきらめる
+    if (!isUsableStream(stream)) {
+      loseMicrophone();
+      return;
+    }
 
     const mimeType = preferredMimeType();
-    const recorder = new MediaRecorder(
-      stream,
-      mimeType ? { mimeType } : undefined,
-    );
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch {
+      loseMicrophone();
+      return;
+    }
     const chunks: Blob[] = [];
     // 捨てる判断は区間ごとに持つ。次の区間の開始が前の stop に影響しないようにする
     let discarded = false;
@@ -276,15 +325,27 @@ export function VoiceAnswerPanel({
       if (discarded || disposedRef.current || exitSignal.aborted) return;
       sendSegment(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
     });
+    // 録音中に取り上げられるとここへ届く。区間は送らずに案内へ移す
+    recorder.addEventListener("error", () => {
+      discarded = true;
+      if (segmentRef.current?.recorder === recorder) segmentRef.current = null;
+      loseMicrophone();
+    });
 
-    recorder.start(250);
+    try {
+      recorder.start(250);
+    } catch {
+      // 権限の取り消しがトラックへ伝わる前でも、開始だけが失敗することがある
+      loseMicrophone();
+      return;
+    }
     segmentRef.current = {
       recorder,
       discard: () => {
         discarded = true;
       },
     };
-  }, [exitSignal, sendSegment]);
+  }, [exitSignal, loseMicrophone, sendSegment]);
 
   /** 発話の終わりとして区切り、文字起こしへ送る */
   const closeSegment = useCallback(() => {

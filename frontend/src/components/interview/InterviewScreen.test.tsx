@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -705,6 +706,25 @@ describe("InterviewScreen の読み上げモード", () => {
         ],
       }),
     );
+  });
+
+  it("対象企業が指定されていないときは案内だけを出し、最初の質問を読み上げない", async () => {
+    // リロードでクエリを失った状態。読み上げるが選ばれたままでも始めてはいけない
+    mocks.search = "strength=standard&readAloud=enabled&maxTurns=10";
+    render(<InterviewScreen mode="interview" {...screenProps} />);
+
+    expect(
+      screen.getByText(
+        "対象企業が指定されていません。練習の設定から開始してください。",
+      ),
+    ).toBeInTheDocument();
+
+    // 初回の読み上げはマイクロタスク越しに始まるため、流し切ってから確かめる
+    await act(async () => {});
+
+    expect(mocks.synthesizeSpeech).not.toHaveBeenCalled();
+    expect(FakeAudio.instances).toHaveLength(0);
+    expect(mocks.getCompany).not.toHaveBeenCalled();
   });
 
   it("チュートリアルでも読み上げるを選ぶと最初の質問を自動再生し、途中で切り替えられる", async () => {
