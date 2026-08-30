@@ -260,6 +260,58 @@ class EvaluationsApiTest(unittest.TestCase):
         self.assertIsNone(listed[legacy.evaluation_id]["question_strength"])
         self.assertIsNone(listed[legacy.evaluation_id]["turn_count"])
 
+    def create_evaluation(self, **overrides):
+        """テスト用の評価結果を1件作り、その ID を返す。"""
+        fields = {
+            "company_id": self.company_id,
+            "company_name": "株式会社テスト",
+            "status": "completed",
+            "total_score": 70,
+            **overrides,
+        }
+        with self.session_factory() as database:
+            evaluation = models.Evaluation(**fields)
+            database.add(evaluation)
+            database.commit()
+            database.refresh(evaluation)
+            return evaluation.evaluation_id
+
+    def test_delete_removes_the_evaluation_and_drops_it_from_the_list(self):
+        target = self.create_evaluation()
+        other = self.create_evaluation()
+
+        response = self.client.delete(f"/evaluations/{target}")
+
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(self.client.get(f"/evaluations/{target}").status_code, 404)
+        listed = [
+            item["evaluation_id"]
+            for item in self.client.get("/evaluations").json()["evaluations"]
+        ]
+        self.assertNotIn(target, listed)
+        self.assertIn(other, listed)
+
+    def test_delete_returns_404_for_an_unknown_evaluation(self):
+        response = self.client.delete("/evaluations/999999")
+
+        self.assertEqual(response.status_code, 404, response.text)
+
+    def test_delete_returns_404_when_deleted_twice(self):
+        target = self.create_evaluation()
+
+        self.assertEqual(self.client.delete(f"/evaluations/{target}").status_code, 204)
+        self.assertEqual(self.client.delete(f"/evaluations/{target}").status_code, 404)
+
+    def test_delete_accepts_processing_and_failed_evaluations(self):
+        processing = self.create_evaluation(status="processing", total_score=None)
+        failed = self.create_evaluation(status="failed", total_score=None, error="評価失敗")
+
+        for evaluation_id in (processing, failed):
+            with self.subTest(evaluation_id=evaluation_id):
+                response = self.client.delete(f"/evaluations/{evaluation_id}")
+                self.assertEqual(response.status_code, 204, response.text)
+
 
 class CalculateTotalScoreTest(unittest.TestCase):
     def test_weighted_average_when_all_three_items_exist(self):

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app import models
 from app.database import SessionLocal, get_db
@@ -58,7 +59,11 @@ def _run_evaluation(evaluation_id: int, company_name: str | None, turns: list[di
         except Exception as e:
             ev.error = str(e)
             ev.status = "failed"
-        db.commit()
+        try:
+            db.commit()
+        except StaleDataError:
+            # 評価中に DELETE /evaluations/{id} で消された。書き戻す先がないので何もしない
+            db.rollback()
     finally:
         db.close()
 
@@ -150,3 +155,21 @@ def get_evaluation(
         "scores": ev.scores,
         "advice": ev.advice,
     }
+
+
+@router.delete("/evaluations/{evaluation_id}", status_code=204, summary="評価結果を削除する")
+def delete_evaluation(
+    evaluation_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(auth.get_current_user)],
+):
+    """評価結果を1件削除する（API仕様.md 5.8）。
+
+    status は問わない。processing の評価を消した場合、バックグラウンドの評価は
+    書き戻す先を失うだけで、行が復活することはない。
+    """
+    ev = db.get(models.Evaluation, evaluation_id)
+    if ev is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="評価結果が見つかりません")
+    db.delete(ev)
+    db.commit()

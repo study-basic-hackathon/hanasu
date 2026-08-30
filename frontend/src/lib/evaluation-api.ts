@@ -80,6 +80,15 @@ export async function getEvaluation(
   return normalizeEvaluation(response);
 }
 
+/** 評価結果を1件削除する（API仕様.md 5.8）。成功は 204 で本文を持たない。 */
+export function deleteEvaluation(evaluationId: number): Promise<void> {
+  return apiRequest<void>(
+    `/evaluations/${evaluationId}`,
+    { method: "DELETE" },
+    { responseType: "none" },
+  );
+}
+
 export type CreateEvaluationInput = {
   companyId: number | null;
   turns: ChatTurn[];

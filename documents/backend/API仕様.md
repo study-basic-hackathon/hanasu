@@ -27,6 +27,7 @@
 | 9 | `POST /evaluations` | 評価を実行する（非同期） | 作る |
 | 10 | `GET /evaluations/{evaluation_id}` | 評価結果を取得する | 作る |
 | 11 | `GET /evaluations` | 評価履歴を一覧する | 作る |
+| 12 | `DELETE /evaluations/{evaluation_id}` | 評価結果を削除する | 作る |
 
 ## 3. 認証
 
@@ -390,7 +391,22 @@ audio: <録音した音声 (webm/opus)>
 - 一覧に `evaluation_id` を含めることで、一覧 → 詳細（5.6）の導線がつながる
 - 一覧は `company_name`、`question_strength`、`turn_count`、項目別 `scores` を返す。既存評価結果の追加項目は `null` とする
 
-### 5.8 評価する指標
+### 5.8 `DELETE /evaluations/{evaluation_id}` — 評価結果の削除
+
+| 操作 | メソッド / パス | インプット | 成功時のアウトプット |
+|---|---|---|---|
+| Delete | `DELETE /evaluations/{evaluation_id}` | パスに評価 ID | `204`（レスポンスボディなし） |
+
+- **物理削除である。** 削除した結果は `GET /evaluations` にも `GET /evaluations/{evaluation_id}` にも現れなくなり、元に戻せない
+- **`status` は問わない。** `processing` の評価も削除できる。バックグラウンドで走っている評価は書き戻す先を失うだけで、行が復活することはない
+- **削除しても応募情報（`companies`）には影響しない。** 逆に応募情報を削除しても評価履歴は残る（[S-16](../frontend/01_design/screens/S-16_履歴一覧.md) 4章）
+
+| 状況 | HTTP ステータス |
+|---|---:|
+| 認証できない | `401` |
+| 評価 ID が存在しない（削除済みを含む） | `404` |
+
+### 5.9 評価する指標
 
 [ADR-0009](../ADR/0009-評価方式.md) で評価項目と責務を、[評価仕様](../評価仕様.md) で計算規則を確定している。
 

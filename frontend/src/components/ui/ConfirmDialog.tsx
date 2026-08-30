@@ -12,6 +12,10 @@ type ConfirmDialogProps = {
   cancelLabel?: string;
   /** 確定のボタンの見た目 */
   confirmVariant?: ButtonVariant;
+  /** 確定の処理中。両方のボタンを押せなくし、確定のラベルを busyLabel に替える（共通仕様 7.1） */
+  busy?: boolean;
+  /** busy のあいだ確定のボタンに出す文言。省略時は confirmLabel のまま */
+  busyLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -26,6 +30,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = "取り消す",
   confirmVariant = "dangerSolid",
+  busy = false,
+  busyLabel,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -41,21 +47,31 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={dialogRef}
-      // Esc も「取り消す」と同じ扱いにする
+      // Esc も「取り消す」と同じ扱いにする。処理中は閉じさせない
       onCancel={(event) => {
         event.preventDefault();
-        onCancel();
+        if (!busy) onCancel();
       }}
       className="m-auto rounded-card border border-line bg-surface p-0 text-ink backdrop:bg-black/30"
     >
       <div className="flex w-[420px] flex-col gap-5 p-7">
         <div className="text-body-sm leading-[1.9]">{message}</div>
         <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" size="sm" onClick={onCancel}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={onCancel}
+          >
             {cancelLabel}
           </Button>
-          <Button variant={confirmVariant} size="sm" onClick={onConfirm}>
-            {confirmLabel}
+          <Button
+            variant={confirmVariant}
+            size="sm"
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? (busyLabel ?? confirmLabel) : confirmLabel}
           </Button>
         </div>
       </div>
