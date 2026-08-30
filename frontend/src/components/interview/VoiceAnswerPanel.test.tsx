@@ -110,6 +110,33 @@ class FailingStartMediaRecorder extends FakeMediaRecorder {
   }
 }
 
+/** ブラウザ側の許可の切り替えを再現する Permissions API のフェイク */
+class FakePermissionStatus {
+  private readonly listeners: Listener[] = [];
+
+  constructor(public state: PermissionState) {}
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    if (type !== "change" || typeof listener !== "function") return;
+    this.listeners.push(listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ) {
+    if (type !== "change") return;
+    const index = this.listeners.indexOf(listener as Listener);
+    if (index >= 0) this.listeners.splice(index, 1);
+  }
+
+  /** サイト設定で許可・ブロックを切り替えたときの通知にあたる */
+  change(state: PermissionState) {
+    this.state = state;
+    for (const listener of [...this.listeners]) listener(new Event("change"));
+  }
+}
+
 class FakeAudioContext {
   createAnalyser() {
     return {
@@ -153,6 +180,20 @@ describe("VoiceAnswerPanel の常時録音", () => {
   const trackStop = vi.fn();
   const getUserMedia = vi.fn();
   let track: FakeMediaStreamTrack;
+  let permissionStatus: FakePermissionStatus;
+
+  /** getUserMedia が返す MediaStream。実ブラウザと同じく取り直すと新しいトラックが来る */
+  function openFakeStream(): MediaStream {
+    const opened = new FakeMediaStreamTrack(trackStop);
+    track = opened;
+    return {
+      getTracks: () => [opened],
+      getAudioTracks: () => [opened],
+      get active() {
+        return opened.readyState === "live";
+      },
+    } as unknown as MediaStream;
+  }
 
   /**
    * ブラウザ設定でマイクを止められた状態を作る。
@@ -170,17 +211,16 @@ describe("VoiceAnswerPanel の常時録音", () => {
     FakeMediaRecorder.instances = [];
     inputLevel = 0;
     track = new FakeMediaStreamTrack(trackStop);
-    getUserMedia.mockResolvedValue({
-      getTracks: () => [track],
-      getAudioTracks: () => [track],
-      get active() {
-        return track.readyState === "live";
-      },
-    } as unknown as MediaStream);
+    getUserMedia.mockImplementation(async () => openFakeStream());
     mocks.transcribeAudio.mockResolvedValue(transcription);
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { getUserMedia },
+    });
+    permissionStatus = new FakePermissionStatus("granted");
+    Object.defineProperty(navigator, "permissions", {
+      configurable: true,
+      value: { query: vi.fn().mockResolvedValue(permissionStatus) },
     });
     vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
     vi.stubGlobal("AudioContext", FakeAudioContext);
@@ -499,6 +539,84 @@ describe("VoiceAnswerPanel の常時録音", () => {
     );
   });
 
+  it("ブロックしたマイクを許可し直すと、読み込み直さずに録音へ戻る", async () => {
+    getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
+    permissionStatus = new FakePermissionStatus("denied");
+    (navigator.permissions.query as ReturnType<typeof vi.fn>).mockResolvedValue(
+      permissionStatus,
+    );
+    const onSubmit = vi.fn();
+    await renderPanel({ onSubmit });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。",
+    );
+
+    // ブラウザ側で許可し直す
+    getUserMedia.mockImplementation(async () => openFakeStream());
+    await act(async () => permissionStatus.change("granted"));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "文字入力モードで始め直す" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "マイクをミュートする" }),
+    ).toBeEnabled();
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+    expect(FakeMediaRecorder.instances[0].state).toBe("recording");
+
+    // 戻ったあとは、いつもどおり発話を送れる
+    await speakThenPause();
+
+    expect(mocks.transcribeAudio).toHaveBeenCalledOnce();
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+      "回答です。",
+      expect.objectContaining({ rawContent: "%えー% 回答です。" }),
+    );
+  });
+
+  it("録音中にブロックされたらマイクを手放し、使えないと知らせる", async () => {
+    const onSubmit = vi.fn();
+    await renderPanel({ onSubmit });
+
+    expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+
+    await act(async () => permissionStatus.change("denied"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。",
+    );
+    expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
+    expect(trackStop).toHaveBeenCalled();
+    expect(FakeMediaRecorder.instances[0].state).toBe("inactive");
+    expect(
+      screen.getByRole("button", { name: "マイクをミュートする" }),
+    ).toBeDisabled();
+
+    await speakThenPause();
+    expect(mocks.transcribeAudio).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("許可とブロックを繰り返しても、表示は実際の権限状態から離れない", async () => {
+    await renderPanel();
+
+    for (let round = 0; round < 2; round += 1) {
+      await act(async () => permissionStatus.change("denied"));
+      expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+
+      await act(async () => permissionStatus.change("granted"));
+      expect(screen.getByText("どうぞお話しください")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(track.enabled).toBe(true);
+    }
+
+    expect(getUserMedia).toHaveBeenCalledTimes(3);
+  });
+
   it("「次の質問へ」の直後に面接官の番へ切り替わっても、区間を送り届ける", async () => {
     // stop() の "stop" イベントが遅れて届く実ブラウザの挙動を再現する
     vi.stubGlobal("MediaRecorder", DeferredStopMediaRecorder);
@@ -538,7 +656,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
 
     expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "マイクが使えなくなりました。ブラウザの設定で許可し直すか、文字入力モードで始め直してください。",
+      "マイクを使えません。ブラウザの設定で許可するか、文字入力モードで始め直してください。",
     );
     // 使えないトラックで録り直しにいかない
     expect(FakeMediaRecorder.instances).toHaveLength(1);
@@ -558,9 +676,7 @@ describe("VoiceAnswerPanel の常時録音", () => {
     await act(async () => {});
 
     expect(screen.getByText("マイクを使えません")).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "マイクが使えなくなりました。",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("マイクを使えません。");
   });
 
   it("マイクの権限が切れた通知を受けたら、その場で聞くのをやめて案内へ移る", async () => {

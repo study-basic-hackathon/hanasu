@@ -21,5 +21,10 @@ describe("PracticeMenuPage", () => {
     );
     expect(screen.queryByText("滑舌練習")).not.toBeInTheDocument();
     expect(screen.queryByText("画面モック")).not.toBeInTheDocument();
+    // 練習モードの設定画面は廃止したため、戻り先はホーム
+    expect(screen.getByRole("link", { name: "ホームへ戻る" })).toHaveAttribute(
+      "href",
+      "/",
+    );
   });
 });

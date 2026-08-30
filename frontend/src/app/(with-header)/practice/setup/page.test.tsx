@@ -3,7 +3,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,13 +12,10 @@ import PracticeSetupPage from "@/app/(with-header)/practice/setup/page";
 const mocks = vi.hoisted(() => ({
   listCompanies: vi.fn(),
   push: vi.fn(),
-  replace: vi.fn(),
-  searchParams: new URLSearchParams("mode=interview"),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
-  useSearchParams: () => mocks.searchParams,
+  useRouter: () => ({ push: mocks.push }),
 }));
 
 vi.mock("@/lib/company-api", () => ({
@@ -40,7 +36,6 @@ const company = {
 describe("PracticeSetupPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.searchParams = new URLSearchParams("mode=interview");
     mocks.listCompanies.mockResolvedValue([company]);
   });
 
@@ -58,9 +53,6 @@ describe("PracticeSetupPage", () => {
     expect(
       screen.getByRole("heading", { name: "本番モードの設定" }),
     ).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "練習モード" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "読み上げモード: 読み上げる" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -235,55 +227,15 @@ describe("PracticeSetupPage", () => {
     expect(screen.queryByText(/職種/)).not.toBeInTheDocument();
   });
 
-  it("練習モードを固定し、既存の練習メニューへ進む", async () => {
-    mocks.searchParams = new URLSearchParams("mode=practice");
-
-    render(<PracticeSetupPage />);
-
-    expect(
-      screen.getByRole("heading", { name: "練習モードの設定" }),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "本番モード" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("spinbutton", { name: "最大ターン数" }),
-    ).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: /株式会社テスト/ }),
-    ).toBeDisabled();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "練習モードを始める" }),
-    );
-
-    expect(mocks.push).toHaveBeenCalledWith("/practice");
-  });
-
-  it("企業追加・編集の戻り先に固定されたモードを含める", async () => {
+  it("企業追加・編集の戻り先にこの画面を渡す", async () => {
     render(<PracticeSetupPage />);
 
     expect(
       await screen.findByRole("link", { name: "企業を追加" }),
-    ).toHaveAttribute(
-      "href",
-      "/companies/new?from=%2Fpractice%2Fsetup%3Fmode%3Dinterview",
-    );
+    ).toHaveAttribute("href", "/companies/new?from=%2Fpractice%2Fsetup");
     expect(screen.getByRole("link", { name: "編集" })).toHaveAttribute(
       "href",
-      "/companies/edit?id=7&from=%2Fpractice%2Fsetup%3Fmode%3Dinterview",
+      "/companies/edit?id=7&from=%2Fpractice%2Fsetup",
     );
   });
-
-  it.each(["", "mode=invalid", "mode=interview&mode=practice"])(
-    "モードを確定できないURL (%s) はホームへ戻す",
-    async (query) => {
-      mocks.searchParams = new URLSearchParams(query);
-
-      render(<PracticeSetupPage />);
-
-      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
-      expect(mocks.listCompanies).not.toHaveBeenCalled();
-    },
-  );
 });
